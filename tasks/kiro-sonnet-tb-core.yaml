@@ -1,0 +1,21 @@
+# tasks/kiro-sonnet-tb-core.yaml
+# 用 kiro-cli + claude-sonnet-4.6 跑 Terminal-Bench 全部 80 个任务
+
+dataset: terminal-bench-core
+
+agent:
+  name: kiro_cli
+  model: claude-sonnet-4.6
+  # kwargs 会通过 tb run --agent-kwarg 传给 agent 的 __init__
+  # kwargs:
+  #   version: "1.29.5"
+  #   prompt_template: custom
+
+run:
+  concurrent: 4
+  # tasks: [hello-world, fix-git]   # 不指定 = 跑全部
+
+judge:
+  model: claude-opus-4.6
+  rubric: default
+  failed_only: true

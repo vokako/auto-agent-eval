@@ -1,0 +1,41 @@
+dimensions:
+  understanding:
+    description: "Did the agent correctly understand the task requirements?"
+    scale: [0, 3]
+    anchors:
+      0: "Completely misunderstood the task"
+      1: "Partial understanding, missed key requirements"
+      2: "Understood the task but missed edge cases"
+      3: "Full understanding of all requirements"
+  approach:
+    description: "Was the approach reasonable and efficient?"
+    scale: [0, 3]
+    anchors:
+      0: "No meaningful approach or completely wrong direction"
+      1: "Attempted something relevant but fundamentally flawed"
+      2: "Reasonable approach with minor issues"
+      3: "Optimal or near-optimal approach"
+  progress:
+    description: "How much progress was made toward the solution?"
+    scale: [0, 3]
+    anchors:
+      0: "No progress"
+      1: "Some initial steps taken"
+      2: "Significant progress, close to solution"
+      3: "Task fully completed (even if tests disagree)"
+  debugging:
+    description: "When encountering errors, did the agent debug effectively?"
+    scale: [0, 3]
+    anchors:
+      0: "Ignored errors or gave up immediately"
+      1: "Noticed errors but couldn't fix them"
+      2: "Debugged some issues successfully"
+      3: "Excellent debugging, systematic error resolution"
+  code_quality:
+    description: "Quality of code/commands produced (if applicable)"
+    scale: [0, 3]
+    anchors:
+      0: "No code produced or completely broken"
+      1: "Code produced but poor quality"
+      2: "Functional code with minor issues"
+      3: "Clean, idiomatic, well-structured code"

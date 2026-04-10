@@ -1,0 +1,19 @@
+dataset: terminal-bench-core
+
+agent:
+  name: kiro_cli
+  model: claude-sonnet-4.6
+
+run:
+  concurrent: 2
+  tasks:
+    - hello-world
+    - fix-permissions
+    - csv-to-parquet
+    - grid-pattern-transform
+    - new-encrypt-command
+
+judge:
+  model: claude-opus-4.6
+  rubric: default
+  failed_only: true

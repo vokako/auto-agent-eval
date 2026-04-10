@@ -1,6 +1,0 @@
-name,age,score,city
-Alice,30,95.5,NYC
-Bob,,88.0,LA
-Charlie,25,,Chicago
-,40,72.0,
-Eve,invalid,91.5,Boston

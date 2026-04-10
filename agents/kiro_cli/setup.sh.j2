@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+export PATH="/installed-agent/bin:$HOME/.local/bin:$PATH"
+echo 'export PATH="/installed-agent/bin:$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+
+kiro-cli-chat --version
+
+mkdir -p {{ auth_dir }}

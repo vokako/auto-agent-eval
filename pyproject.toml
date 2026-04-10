@@ -1,19 +1,20 @@
 [project]
-name = "agent-eval"
-version = "0.1.0"
-description = "Add your description here"
+name = "aae"
+version = "0.2.0"
+description = "Terminal-Bench evaluation extension with Agent-as-Judge"
 readme = "README.md"
-authors = [
-    { name = "Clawd", email = "fffff.c@gmail.com" }
-]
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "pyyaml>=6.0.3",
+    "terminal-bench>=0.2.18",
 ]
 
 [project.scripts]
-agent-eval = "agent_eval.cli:main"
+aae = "aae.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.9.30,<0.10.0"]
-build-backend = "uv_build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["aae"]

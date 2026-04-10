@@ -1,0 +1,2 @@
+name: kiro-cli
+import_path: agents.kiro_cli.kiro_cli_agent:KiroCliAgent

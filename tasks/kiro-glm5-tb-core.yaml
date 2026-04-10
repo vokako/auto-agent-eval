@@ -1,0 +1,15 @@
+# tasks/kiro-glm5-tb-core.yaml
+
+dataset: terminal-bench-core
+
+agent:
+  name: kiro_cli
+  model: glm-5
+
+run:
+  concurrent: 4
+
+judge:
+  model: claude-opus-4.6
+  rubric: default
+  failed_only: true

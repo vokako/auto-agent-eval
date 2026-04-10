@@ -1,7 +1,14 @@
 __pycache__/
 *.pyc
 .venv/
-results/
+.venv-tb/
+runs/
 *.egg-info/
 dist/
 build/
+.cache/
+node_modules/
+temp/
+uv.lock
+agents/*/bin/
+datasets/
