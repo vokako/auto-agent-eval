@@ -18,4 +18,4 @@ run:
 judge:
   model: claude-opus-4.6
   rubric: default
-  failed_only: true
+  failed_only: false

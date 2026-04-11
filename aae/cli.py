@@ -145,7 +145,7 @@ def cmd_run(args):
                 run_dir=PROJECT_ROOT / "runs" / run_id,
                 model=judge_cfg.get("model", "claude-opus-4.6"),
                 rubric=judge_cfg.get("rubric", "default"),
-                failed_only=judge_cfg.get("failed_only", True),
+                failed_only=judge_cfg.get("failed_only", False),
             )
 
 
@@ -154,7 +154,7 @@ def cmd_judge(args):
         run_dir=Path(args.run_dir),
         model=args.model,
         rubric=args.rubric,
-        failed_only=not args.judge_all,
+        failed_only=args.failed_only,
         task_ids=args.tasks,
     )
 
@@ -163,7 +163,7 @@ def _run_judge(
     run_dir: Path,
     model: str = "claude-opus-4.6",
     rubric: str = "default",
-    failed_only: bool = True,
+    failed_only: bool = False,
     task_ids: list[str] | None = None,
 ):
     tb_results = tb.load_tb_run(run_dir)
@@ -310,7 +310,7 @@ def main():
     p_judge = sub.add_parser("judge", help="Run judge on existing TB results")
     p_judge.add_argument("run_dir")
     p_judge.add_argument("--tasks", nargs="*")
-    p_judge.add_argument("--all", action="store_true", dest="judge_all")
+    p_judge.add_argument("--failed-only", action="store_true", help="Only judge failed tasks")
     p_judge.add_argument("--model", default="claude-opus-4.6")
     p_judge.add_argument("--rubric", default="default")
     p_judge.set_defaults(func=cmd_judge)
