@@ -12,3 +12,4 @@ temp/
 uv.lock
 agents/*/bin/
 datasets/
+jobs/

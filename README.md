@@ -44,31 +44,33 @@ agent-eval/
 
 ## 怎么用
 
-### 第一步：跑 Terminal-Bench
+### 用 Harbor 跑（推荐）
 
 ```bash
-pip install terminal-bench
+pip install harbor
 
-# 跑单个任务
-tb run \
-    --agent-import-path agents.kiro_cli.kiro_cli_agent:KiroCliAgent \
-    --dataset-path ./datasets/terminal-bench-core \
-    --task-id hello-world \
-    --model claude-sonnet-4.6
+# CC + Sonnet 4.6 via Bedrock
+harbor run -d terminal-bench/terminal-bench-2 -a claude-code \
+    -m global.anthropic.claude-sonnet-4-6 \
+    --ae CLAUDE_CODE_USE_BEDROCK=1 --ae AWS_REGION=us-east-1 \
+    -n 4
 
-# 跑全部 80 个任务
-tb run \
-    --agent-import-path agents.kiro_cli.kiro_cli_agent:KiroCliAgent \
-    --dataset-path ./datasets/terminal-bench-core \
-    --model claude-sonnet-4.6 \
-    --n-concurrent 4
+# Kiro CLI
+harbor run -d terminal-bench/terminal-bench-2 \
+    --agent-import-path agents.kiro_cli.harbor_agent:KiroCliAgent \
+    -m claude-sonnet-4.6 -n 4
+
+# Qoder CLI
+harbor run -d terminal-bench/terminal-bench-2 \
+    --agent-import-path agents.qoder_cli.harbor_agent:QoderCliAgent \
+    -m lite --ae QODER_PERSONAL_ACCESS_TOKEN=$QODER_PERSONAL_ACCESS_TOKEN -n 4
 ```
 
-结果保存在 `runs/{run-id}/`，每个任务有 pytest 结果 + agent 终端输出。
-
-### 或者用 task 配置一键跑（推荐）
+### 用 AAE 跑（TB legacy + judge）
 
 ```bash
+uv sync
+
 # 列出可用的 task
 aae list
 

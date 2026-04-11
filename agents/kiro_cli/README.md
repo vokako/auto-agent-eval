@@ -1,46 +1,44 @@
-# Kiro CLI — Terminal-Bench 适配器
+# Kiro CLI Adapter
 
-让 Terminal-Bench 能跑 kiro-cli。
+## Auth
 
-## 文件说明
-
-| 文件 | 作用 |
-|------|------|
-| `kiro_cli_agent.py` | 实现 Terminal-Bench 的 `AbstractInstalledAgent` 接口 |
-| `setup.sh.j2` | Jinja2 模板，在 Docker 容器里下载安装 kiro-cli 二进制 |
-| `agent.yaml` | 配置：AWS region、版本 |
-
-## 工作流程
-
-1. Terminal-Bench 启动 Docker 容器
-2. `setup.sh.j2` 下载 kiro-cli Linux 二进制到容器里
-3. `kiro_cli_agent.py` 把宿主机的鉴权文件 (`data.sqlite3`) 复制到容器
-4. 执行 `kiro-cli chat --no-interactive --trust-all-tools --model <model> <instruction>`
-5. Terminal-Bench 跑 pytest 验证结果
-
-## 鉴权
-
-kiro-cli 登录后鉴权信息存在：
+sqlite DB copied into container from host:
 - Linux: `~/.local/share/kiro-cli/data.sqlite3`
 - macOS: `~/Library/Application Support/kiro-cli/data.sqlite3`
 
-适配器自动检测路径，复制到容器里。先在宿主机登录：
+Login on host first: `kiro-cli login && kiro-cli whoami`
+
+## Binary
+
+Pre-downloaded to `bin/{version}/kiro-cli-chat` (gitignored). Only `kiro-cli-chat` needed (378MB x86_64).
+
+Download: `https://du7u4d2q1sjz6.cloudfront.net/kiro-cli/kiro-cli-chat-{version}-x86_64-linux.gz`
+
+## TB Usage
 
 ```bash
-kiro-cli login
-kiro-cli whoami  # 验证
+tb run --agent-import-path agents.kiro_cli.kiro_cli_agent:KiroCliAgent \
+    --model claude-sonnet-4.6 ...
 ```
 
-## 用法
+## Harbor Usage
 
 ```bash
-# 指定模型跑
-tb run \
-    --agent-import-path agents.kiro_cli.kiro_cli_agent:KiroCliAgent \
-    --dataset-path ./datasets/terminal-bench-core \
-    --model claude-sonnet-4.6 \
-    --task-id hello-world
-
-# 可用模型
-# claude-sonnet-4.6, claude-opus-4.6, glm-5, minimax-m2.5, qwen3-coder-next, ...
+harbor run --agent-import-path agents.kiro_cli.harbor_agent:KiroCliAgent \
+    -m claude-sonnet-4.6 ...
 ```
+
+## Available Models
+
+`auto`, `claude-opus-4.6`, `claude-sonnet-4.6`, `claude-haiku-4.5`, `deepseek-3.2`, `kimi-k2.5`, `minimax-m2.5`, `glm-5`, `qwen3-coder-next`
+
+## Flags
+
+- `--no-interactive` — non-interactive mode
+- `--trust-all-tools` / `-a` — skip tool approval
+- `--wrap never` — no line wrapping
+- `--model X` — model selection
+
+## Usage Stats
+
+Credits parsed from terminal output: `▸ Credits: 0.07 • Time: 4s`
