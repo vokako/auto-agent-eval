@@ -19,7 +19,7 @@ _AUTH_PATHS = [
     Path("~/Library/Application Support/kiro-cli/data.sqlite3"),
 ]
 
-CONTAINER_AUTH_DIR = "/root/.local/share/kiro-cli"
+CONTAINER_AUTH_DIR = None  # resolved at runtime via container HOME
 
 
 def _find_auth_db() -> Path | None:
@@ -65,7 +65,12 @@ class KiroCliAgent(AbstractInstalledAgent):
         return self._get_templated_script_path("setup.sh.j2")
 
     def _get_template_variables(self) -> dict[str, str]:
-        return {"auth_dir": CONTAINER_AUTH_DIR}
+        return {}
+
+    def _get_container_auth_dir(self, session) -> str:
+        result = session.container.exec_run(["sh", "-c", "echo $HOME"])
+        home = result.output.decode().strip() or "/root"
+        return f"{home}/.local/share/kiro-cli"
 
     def perform_task(self, instruction, session, logging_dir=None):
         bin_dir = _find_bin_dir(self._version)
@@ -84,9 +89,12 @@ class KiroCliAgent(AbstractInstalledAgent):
             raise FileNotFoundError(
                 "Kiro CLI auth DB not found. Run 'kiro-cli login' first."
             )
+
+        auth_dir = self._get_container_auth_dir(session)
+        session.container.exec_run(["mkdir", "-p", auth_dir])
         session.copy_to_container(
             auth_db,
-            container_dir=CONTAINER_AUTH_DIR,
+            container_dir=auth_dir,
             container_filename="data.sqlite3",
         )
 
