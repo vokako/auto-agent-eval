@@ -48,6 +48,12 @@ def _build_tb_command(cfg: dict, run_id: str) -> list[str]:
     for key, value in agent_cfg.get("kwargs", {}).items():
         cmd.extend(["--agent-kwarg", f"{key}={value}"])
 
+    # system_prompt → --agent-kwarg (special handling for multiline)
+    if agent_cfg.get("system_prompt"):
+        # Replace newlines with \n literal so it survives CLI parsing
+        sp = agent_cfg["system_prompt"].strip().replace("\n", "\\n")
+        cmd.extend(["--agent-kwarg", f"system_prompt={sp}"])
+
     # task subset
     for t in run_cfg.get("tasks", []):
         cmd.extend(["--task-id", t])
@@ -121,8 +127,8 @@ def cmd_run(args):
 
     cmd = _build_tb_command(cfg, run_id)
     run_dir = PROJECT_ROOT / "runs" / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
-    log_file = run_dir / "aae.log"
+    log_file = PROJECT_ROOT / "runs" / f"{run_id}.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
     print(f"Running: {args.task}")
     print(f"  dataset: {cfg['dataset']}")
@@ -136,6 +142,11 @@ def cmd_run(args):
 
     with open(log_file, "w") as lf:
         result = subprocess.run(cmd, cwd=PROJECT_ROOT, stdout=lf, stderr=subprocess.STDOUT)
+
+    # Move log into run dir after tb creates it
+    if run_dir.exists():
+        (run_dir / "aae.log").write_text(log_file.read_text())
+        log_file.unlink()
 
     if result.returncode == 0:
         judge_cfg = cfg.get("judge")

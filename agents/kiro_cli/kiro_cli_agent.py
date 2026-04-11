@@ -31,16 +31,13 @@ def _find_auth_db() -> Path | None:
 
 
 def _find_bin_dir(version: str | None = None) -> Path:
-    """Find kiro-cli binary directory. If version specified, use that subfolder."""
     bin_dir = AGENT_DIR / "bin"
     if version:
         versioned = bin_dir / version
         if versioned.exists():
             return versioned
-    # Fall back to unversioned bin/ or latest version subfolder
     if (bin_dir / "kiro-cli-chat").exists():
         return bin_dir
-    # Find latest version subfolder
     versions = sorted([d for d in bin_dir.iterdir() if d.is_dir()], reverse=True)
     if versions:
         return versions[0]
@@ -53,6 +50,7 @@ class KiroCliAgent(AbstractInstalledAgent):
         super().__init__(*args, **kwargs)
         self._model_name = model_name
         self._version = kwargs.get("version")
+        self._system_prompt = kwargs.get("system_prompt", "").replace("\\n", "\n")
 
     @staticmethod
     def name() -> str:
@@ -70,7 +68,6 @@ class KiroCliAgent(AbstractInstalledAgent):
         return {"auth_dir": CONTAINER_AUTH_DIR}
 
     def perform_task(self, instruction, session, logging_dir=None):
-        # Copy binary
         bin_dir = _find_bin_dir(self._version)
         bin_path = bin_dir / "kiro-cli-chat"
         if not bin_path.exists():
@@ -82,7 +79,6 @@ class KiroCliAgent(AbstractInstalledAgent):
         )
         session.container.exec_run(["chmod", "+x", "/installed-agent/bin/kiro-cli-chat"])
 
-        # Copy auth
         auth_db = _find_auth_db()
         if not auth_db:
             raise FileNotFoundError(
@@ -97,6 +93,9 @@ class KiroCliAgent(AbstractInstalledAgent):
         return super().perform_task(instruction, session, logging_dir)
 
     def _run_agent_commands(self, instruction: str) -> list[TerminalCommand]:
+        if self._system_prompt:
+            instruction = self._system_prompt.strip() + "\n\n" + instruction
+
         escaped = shlex.quote(instruction)
         model_flag = ""
         if self._model_name:

@@ -1,10 +1,16 @@
-# tasks/kiro-qwen-tb-core.yaml
-
 dataset: terminal-bench-core
 
 agent:
   name: kiro_cli
   model: qwen3-coder-next
+  system_prompt: |
+    You are an autonomous coding agent. Follow these rules strictly:
+    - Execute the task completely without asking any questions
+    - Make all decisions yourself (choose defaults when not specified)
+    - Never ask for clarification, paths, or preferences
+    - If a directory or file location is not specified, explore the filesystem to find it
+    - Try multiple approaches if the first one fails
+    - Verify your work before finishing
 
 run:
   concurrent: 4
