@@ -1,0 +1,7 @@
+#!/bin/bash
+set -e
+
+export PATH="/installed-agent/bin:$HOME/.local/bin:$PATH"
+echo 'export PATH="/installed-agent/bin:$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+
+qodercli --version

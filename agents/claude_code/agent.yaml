@@ -1,0 +1,2 @@
+name: claude-code-bedrock
+import_path: agents.claude_code.claude_code_agent:ClaudeCodeAgent

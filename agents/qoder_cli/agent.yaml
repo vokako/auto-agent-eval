@@ -1,0 +1,2 @@
+name: qoder-cli
+import_path: agents.qoder_cli.qoder_cli_agent:QoderCliAgent
