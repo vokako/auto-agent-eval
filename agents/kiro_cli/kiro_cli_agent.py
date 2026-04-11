@@ -91,12 +91,16 @@ class KiroCliAgent(AbstractInstalledAgent):
             )
 
         auth_dir = self._get_container_auth_dir(session)
-        session.container.exec_run(["mkdir", "-p", auth_dir])
+        # Copy to /tmp first (always exists), then move into place
         session.copy_to_container(
             auth_db,
-            container_dir=auth_dir,
-            container_filename="data.sqlite3",
+            container_dir="/tmp",
+            container_filename="kiro-auth.sqlite3",
         )
+        session.container.exec_run([
+            "sh", "-c",
+            f"mkdir -p {auth_dir} && mv /tmp/kiro-auth.sqlite3 {auth_dir}/data.sqlite3"
+        ])
 
         return super().perform_task(instruction, session, logging_dir)
 
