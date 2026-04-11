@@ -1,2 +1,3 @@
 name: qoder-cli
 import_path: agents.qoder_cli.qoder_cli_agent:QoderCliAgent
+harbor_import_path: agents.qoder_cli.harbor_agent:QoderCliAgent
