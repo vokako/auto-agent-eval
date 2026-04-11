@@ -103,13 +103,6 @@ class KiroCliAgent(AbstractInstalledAgent):
             model_flag = " --model " + shlex.quote(self._model_name)
         return [
             TerminalCommand(
-                command="cd /app",
-                min_timeout_sec=0.1,
-                max_timeout_sec=5.0,
-                block=True,
-                append_enter=True,
-            ),
-            TerminalCommand(
                 command=(
                     f"kiro-cli-chat chat --no-interactive --trust-all-tools"
                     f" --wrap never{model_flag} {escaped}"
