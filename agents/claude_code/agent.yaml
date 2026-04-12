@@ -1,2 +1,3 @@
 name: claude-code-bedrock
 import_path: agents.claude_code.claude_code_agent:ClaudeCodeAgent
+harbor_import_path: agents.claude_code.harbor_agent:ClaudeCodeAgent
