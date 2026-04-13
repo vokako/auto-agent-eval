@@ -7,6 +7,7 @@ CC binary directly, instead of downloading+installing inside the container.
 import json
 import os
 import shlex
+import urllib.request
 from pathlib import Path
 
 from harbor.agents.installed.base import (
@@ -16,6 +17,34 @@ from harbor.agents.installed.base import (
     with_prompt_template,
 )
 from harbor.agents.installed.claude_code import ClaudeCode as _BuiltinCC
+
+
+def _get_ec2_credentials() -> dict[str, str]:
+    try:
+        req = urllib.request.Request(
+            "http://169.254.169.254/latest/api/token",
+            method="PUT",
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"},
+        )
+        token = urllib.request.urlopen(req, timeout=2).read().decode()
+        headers = {"X-aws-ec2-metadata-token": token}
+        req = urllib.request.Request(
+            "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+            headers=headers,
+        )
+        role = urllib.request.urlopen(req, timeout=2).read().decode().strip()
+        req = urllib.request.Request(
+            f"http://169.254.169.254/latest/meta-data/iam/security-credentials/{role}",
+            headers=headers,
+        )
+        creds = json.loads(urllib.request.urlopen(req, timeout=2).read())
+        return {
+            "AWS_ACCESS_KEY_ID": creds["AccessKeyId"],
+            "AWS_SECRET_ACCESS_KEY": creds["SecretAccessKey"],
+            "AWS_SESSION_TOKEN": creds["Token"],
+        }
+    except Exception:
+        return {}
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 
@@ -75,12 +104,16 @@ class ClaudeCodeAgent(BaseInstalledAgent):
         }
         if use_bedrock:
             env["CLAUDE_CODE_USE_BEDROCK"] = "1"
+            env["ANTHROPIC_API_KEY"] = "not-used"
             for var in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
                         "AWS_SESSION_TOKEN", "AWS_PROFILE", "AWS_REGION",
                         "AWS_BEARER_TOKEN_BEDROCK"):
                 val = os.environ.get(var, "")
                 if val:
                     env[var] = val
+            # Fetch EC2 IAM credentials if not already set
+            if "AWS_ACCESS_KEY_ID" not in env:
+                env.update(_get_ec2_credentials())
         else:
             env["ANTHROPIC_API_KEY"] = os.environ.get("ANTHROPIC_API_KEY") or ""
         return {k: v for k, v in env.items() if v is not None}
