@@ -16,6 +16,8 @@ header { display: flex; align-items: center; justify-content: space-between; pad
 h1 { font-size: 17px; font-weight: 600; cursor: pointer; letter-spacing: -0.3px; transition: color 0.15s; }
 h1:hover { color: var(--blue); }
 .header-actions { display: flex; align-items: center; gap: 8px; }
+.github-link { color: var(--dim); display: flex; align-items: center; padding: 4px; margin-left: 4px; transition: color 0.15s; }
+.github-link:hover { color: var(--text); }
 .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .breadcrumb .link { color: var(--blue); cursor: pointer; text-decoration: none; }
 .breadcrumb .link:hover { text-decoration: underline; }
