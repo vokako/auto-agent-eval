@@ -1,4 +1,4 @@
-# Kiro CLI + Sonnet 4.6, TB2 lite (51 tasks)
+# Kiro CLI + deepseek-3.2, TB2 lite (51 tasks)
 
 dataset: terminal-bench/terminal-bench-2
 task_list: tb2-lite.txt
@@ -6,12 +6,7 @@ task_list: tb2-lite.txt
 agent:
   name: kiro_cli
   import_path: agents.kiro_cli.harbor_agent:KiroCliAgent
-  model: claude-sonnet-4.6
+  model: deepseek-3.2
 
 run:
   concurrent: 8
-
-judge:
-  model: claude-opus-4.6
-  rubric: default
-  failed_only: false
