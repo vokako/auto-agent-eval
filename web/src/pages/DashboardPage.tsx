@@ -68,6 +68,16 @@ export default function DashboardPage() {
         <span>·</span>
         <span>{sorted.reduce((s, j) => s + j.total, 0)} tasks</span>
       </div>
+      {(fConfig.size > 0 || fAgent.size > 0 || fAdapter.size > 0 || fMinTasks > 0 || fMinRate > 0) && (
+        <div className="active-filters">
+          {[...fConfig].map(v => <span key={`c-${v}`} className="filter-tag" onClick={() => { const n = new Set(fConfig); n.delete(v); setFConfig(n); }}>Config: {v} ✕</span>)}
+          {[...fAgent].map(v => <span key={`a-${v}`} className="filter-tag" onClick={() => { const n = new Set(fAgent); n.delete(v); setFAgent(n); }}>Agent: {v} ✕</span>)}
+          {[...fAdapter].map(v => <span key={`d-${v}`} className="filter-tag" onClick={() => { const n = new Set(fAdapter); n.delete(v); setFAdapter(n); }}>Adapter: {v} ✕</span>)}
+          {fMinTasks > 0 && <span className="filter-tag" onClick={() => setFMinTasks(0)}>Tasks ≥ {fMinTasks} ✕</span>}
+          {fMinRate > 0 && <span className="filter-tag" onClick={() => setFMinRate(0)}>Rate ≥ {fMinRate}% ✕</span>}
+          <button className="filter-clear" onClick={() => { setFConfig(new Set()); setFAgent(new Set()); setFAdapter(new Set()); setFMinTasks(0); setFMinRate(0); }}>Clear all</button>
+        </div>
+      )}
       <table className="jobs-table">
         <thead><tr>
           <th style={{ width: 32 }}></th>
