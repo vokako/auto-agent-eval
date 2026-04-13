@@ -6,6 +6,7 @@ export interface JobSummary {
   model: string;
   adapter: string;
   version: string;
+  dataset: string;
   passed: number;
   failed: number;
   errors: number;
@@ -30,6 +31,7 @@ export interface JobDetail {
   model: string;
   adapter: string;
   version: string;
+  dataset: string;
   tasks: TaskResult[];
   started_at: string;
   finished_at: string | null;

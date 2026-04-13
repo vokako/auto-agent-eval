@@ -54,6 +54,7 @@ export default function JobPage() {
           <div className="info-item"><label>Agent</label><span>{job.agent || "—"}</span></div>
           <div className="info-item"><label>Model</label><span>{job.model || "—"}</span></div>
           <div className="info-item"><label>Adapter</label><AdapterTag adapter={job.adapter} version={job.version} /></div>
+          <div className="info-item"><label>Dataset</label><span>{job.dataset || "—"}</span></div>
           <div className="info-item"><label>Date</label><span>{fmtTime(job.started_at)}</span></div>
           <div className="info-item"><label>Rate</label><span className={`pill ${rateClass(rate)}`}>{rate.toFixed(1)}%</span></div>
         </div>

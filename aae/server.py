@@ -66,21 +66,25 @@ def _read_agent_info(job_dir: Path) -> tuple[str, str]:
             if not name and import_path:
                 name = import_path.split(":")[1].replace("Agent", "").replace("Cli", " CLI") if ":" in import_path else import_path
             model = a.get("model_name", "") or ""
-            return name, model
+            return {"name": name, "model": model, "builtin": builtin, "import_path": import_path, "version": version,
+                "dataset": ""}
     except Exception:
-        pass
-    return "", ""
+        return {}
 
 
 def _agent_extra(job_dir: Path) -> dict:
-    """Get builtin/custom flag and agent version from config + first trial log."""
-    info = {"builtin": False, "version": ""}
+    """Get builtin/custom flag, agent version, and dataset from config + first trial log."""
+    info = {"builtin": False, "version": "", "dataset": ""}
     config_f = job_dir / "config.json"
     if not config_f.exists():
         return info
     try:
-        a = json.load(open(config_f)).get("agents", [{}])[0]
+        cfg = json.load(open(config_f))
+        a = cfg.get("agents", [{}])[0]
         info["builtin"] = bool(a.get("name"))
+        datasets = cfg.get("datasets", [])
+        if datasets:
+            info["dataset"] = datasets[0].get("name", "")
     except Exception:
         return info
 
@@ -167,6 +171,7 @@ def list_jobs():
                     "model": model_name,
                     "adapter": "built-in" if extra["builtin"] else "custom",
                     "version": extra["version"],
+                    "dataset": extra["dataset"],
                     "passed": passed,
                     "failed": total - passed,
                     "errors": errors,
@@ -218,6 +223,7 @@ def get_job(config: str, timestamp: str):
         "model": model_name,
         "adapter": "built-in" if extra["builtin"] else "custom",
         "version": extra["version"],
+        "dataset": extra["dataset"],
         "tasks": task_list,
         "started_at": parsed.get("started_at"),
         "finished_at": parsed.get("finished_at"),

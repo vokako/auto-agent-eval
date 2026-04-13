@@ -93,6 +93,7 @@ export default function DashboardPage() {
             Adapter
             <ColumnFilter values={adapters} selected={fAdapter} onChange={setFAdapter} />
           </th>
+          <th>Dataset</th>
           <th className="sort r" onClick={() => toggleSort("total")}>
             Tasks{arrow("total")}
             <ColumnRangeFilter value={fMinTasks} max={100} onChange={setFMinTasks} />
@@ -112,6 +113,7 @@ export default function DashboardPage() {
             <td className="bold">{j.config}</td>
             <td className="dim">{j.agent || "—"} <span className="muted">/ {j.model || "?"}</span></td>
             <td><AdapterTag adapter={j.adapter} version={j.version} /></td>
+            <td className="dim">{j.dataset ? j.dataset.split("/").pop() : "—"}</td>
             <td className="r mono">{j.total}</td>
             <td className="r mono">{j.passed}</td>
             <td className="r"><span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span></td>
