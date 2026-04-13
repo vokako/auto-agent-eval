@@ -66,10 +66,10 @@ def _read_agent_info(job_dir: Path) -> tuple[str, str]:
             if not name and import_path:
                 name = import_path.split(":")[1].replace("Agent", "").replace("Cli", " CLI") if ":" in import_path else import_path
             model = a.get("model_name", "") or ""
-            return {"name": name, "model": model, "builtin": builtin, "import_path": import_path, "version": version,
-                "dataset": ""}
+            return name, model
     except Exception:
-        return {}
+        pass
+    return "", ""
 
 
 def _agent_extra(job_dir: Path) -> dict:
@@ -145,7 +145,7 @@ def list_jobs():
 
     jobs = []
     for config_dir in sorted(JOBS_DIR.iterdir()):
-        if not config_dir.is_dir() or (config_dir / "result.json").exists():
+        if not config_dir.is_dir() or config_dir.name.startswith(".") or (config_dir / "result.json").exists():
             continue
         for job_dir in sorted(config_dir.iterdir(), reverse=True):
             rf = job_dir / "result.json"
