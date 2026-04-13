@@ -13,6 +13,7 @@ export interface JobSummary {
   total: number;
   rate: number;
   duration: string;
+  total_task_time: string;
   finished: boolean;
   status: string;
   n_total: number;

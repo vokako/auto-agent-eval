@@ -140,6 +140,29 @@ def _duration_str(started: str | None, finished: str | None) -> str:
         return ""
 
 
+def _sum_trial_durations(job_dir: Path) -> str:
+    """Sum individual trial durations (agent actual work time)."""
+    total_secs = 0
+    for d in job_dir.iterdir():
+        if not d.is_dir() or "__" not in d.name:
+            continue
+        rf = d / "result.json"
+        if not rf.exists():
+            continue
+        try:
+            t = json.load(open(rf))
+            s = datetime.fromisoformat(t["started_at"].replace("Z", "+00:00"))
+            e = datetime.fromisoformat(t["finished_at"].replace("Z", "+00:00"))
+            total_secs += (e - s).total_seconds()
+        except Exception:
+            continue
+    if total_secs == 0:
+        return ""
+    hours, rem = divmod(int(total_secs), 3600)
+    mins, _ = divmod(rem, 60)
+    return f"{hours}h{mins:02d}m" if hours else f"{mins}m"
+
+
 @app.get("/api/jobs")
 def list_jobs():
     if not JOBS_DIR.exists():
@@ -180,6 +203,7 @@ def list_jobs():
                     "total": total,
                     "rate": round(passed / total * 100, 1) if total else 0,
                     "duration": _duration_str(started, finished),
+                    "total_task_time": _sum_trial_durations(job_dir),
                     "finished": finished is not None,
                     "status": "done" if finished else "running",
                     "n_total": parsed.get("n_total", 0),

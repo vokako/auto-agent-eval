@@ -104,7 +104,8 @@ export default function DashboardPage() {
             <ColumnRangeFilter value={fMinRate} max={100} onChange={setFMinRate} suffix="%" />
           </th>
           <th className="sort r" onClick={() => toggleSort("errors")}>Err{arrow("errors")}</th>
-          <th className="r">Time</th>
+          <th className="r">Wall</th>
+          <th className="r">Σ Task</th>
           <th>Status</th>
           <th className="sort" onClick={() => toggleSort("started_at")}>Date{arrow("started_at")}</th>
         </tr></thead>
@@ -120,6 +121,7 @@ export default function DashboardPage() {
             <td className="r"><span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span></td>
             <td className="r mono">{j.errors || "—"}</td>
             <td className="r dim">{j.duration || "—"}</td>
+            <td className="r dim">{j.total_task_time || "—"}</td>
             <td>
               {j.status === "running" ? (
                 <span className="status-running">● {j.progress}/{j.n_total}</span>
