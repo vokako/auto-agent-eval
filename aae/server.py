@@ -104,6 +104,17 @@ def _agent_extra(job_dir: Path) -> dict:
             except Exception:
                 pass
         break
+
+    # 2. Try bin/ directory version for custom adapters
+    import_path = a.get("import_path") or ""
+    if import_path and ":" in import_path:
+        mod_path = import_path.split(":")[0].rsplit(".", 1)[0].replace(".", "/")
+        bin_dir = PROJECT_ROOT / mod_path / "bin"
+        if bin_dir.exists():
+            versions = sorted([d.name for d in bin_dir.iterdir() if d.is_dir()], reverse=True)
+            if versions:
+                info["version"] = versions[0]
+
     return info
 
 
