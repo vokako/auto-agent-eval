@@ -69,8 +69,6 @@ class ClaudeCodeAgent(BaseInstalledAgent):
     def _build_env(self) -> dict[str, str]:
         use_bedrock = os.environ.get("CLAUDE_CODE_USE_BEDROCK", "") == "1"
         env = {
-            "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY")
-            or os.environ.get("ANTHROPIC_AUTH_TOKEN") or "",
             "CLAUDE_CODE_OAUTH_TOKEN": os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", ""),
             "FORCE_AUTO_BACKGROUND_TASKS": "1",
             "ENABLE_BACKGROUND_TASKS": "1",
@@ -83,6 +81,8 @@ class ClaudeCodeAgent(BaseInstalledAgent):
                 val = os.environ.get(var, "")
                 if val:
                     env[var] = val
+        else:
+            env["ANTHROPIC_API_KEY"] = os.environ.get("ANTHROPIC_API_KEY") or ""
         return {k: v for k, v in env.items() if v is not None}
 
     def populate_context_post_run(self, context: AgentContext) -> None:
@@ -112,6 +112,13 @@ class ClaudeCodeAgent(BaseInstalledAgent):
         env = self._build_env()
         # Merge _extra_env (from --ae flags) so Bedrock creds are available
         env.update(self._extra_env)
+        # Set model via env var (same as built-in CC)
+        if self.model_name:
+            use_bedrock = env.get("CLAUDE_CODE_USE_BEDROCK") == "1"
+            if use_bedrock and "/" in self.model_name:
+                env["ANTHROPIC_MODEL"] = self.model_name.split("/", 1)[-1]
+            else:
+                env["ANTHROPIC_MODEL"] = self.model_name
         from harbor.models.trial.paths import EnvironmentPaths
         env["CLAUDE_CONFIG_DIR"] = (EnvironmentPaths.agent_dir / "sessions").as_posix()
 
@@ -124,6 +131,7 @@ class ClaudeCodeAgent(BaseInstalledAgent):
         # Run as 'agent' user to avoid CC's root check
         cmd = (
             f"export {env_exports} PATH=/home/agent/.local/bin:/installed-agent/bin:$PATH; "
+            f"cd /app && "
             f"mkdir -p $CLAUDE_CONFIG_DIR/debug $CLAUDE_CONFIG_DIR/projects/-app "
             f"$CLAUDE_CONFIG_DIR/shell-snapshots $CLAUDE_CONFIG_DIR/statsig "
             f"$CLAUDE_CONFIG_DIR/todos $CLAUDE_CONFIG_DIR/skills && "
