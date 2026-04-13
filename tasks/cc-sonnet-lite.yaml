@@ -12,7 +12,7 @@ agent:
     AWS_REGION: us-east-1
 
 run:
-  concurrent: 4
+  concurrent: 8
 
 judge:
   model: claude-opus-4.6

@@ -1,0 +1,14 @@
+# Qoder CLI + Qwen3.6-Plus, TB2 lite (51 tasks)
+
+dataset: terminal-bench/terminal-bench-2
+task_list: tb2-lite.txt
+
+agent:
+  name: qoder_cli
+  import_path: agents.qoder_cli.harbor_agent:QoderCliAgent
+  model: Qwen3.6-Plus
+  env:
+    QODER_PERSONAL_ACCESS_TOKEN: ${QODER_PERSONAL_ACCESS_TOKEN}
+
+run:
+  concurrent: 8
