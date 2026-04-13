@@ -27,6 +27,9 @@ export default function JobPage() {
   const fail = tasks.filter(t => !t.passed).length;
   const err = tasks.filter(t => !!t.error_type).length;
   const rate = tasks.length ? pass / tasks.length * 100 : 0;
+  const totalTests = tasks.reduce((s, t) => s + t.tests_total, 0);
+  const passedTests = tasks.reduce((s, t) => s + t.tests_passed, 0);
+  const testRate = totalTests ? passedTests / totalTests * 100 : 0;
 
   const openTask = async (name: string) => {
     setTaskLoading(true);
@@ -56,7 +59,8 @@ export default function JobPage() {
           <div className="info-item"><label>Adapter</label><AdapterTag adapter={job.adapter} version={job.version} /></div>
           <div className="info-item"><label>Dataset</label><span>{job.dataset || "—"}</span></div>
           <div className="info-item"><label>Date</label><span>{fmtTime(job.started_at)}</span></div>
-          <div className="info-item"><label>Rate</label><span className={`pill ${rateClass(rate)}`}>{rate.toFixed(1)}%</span></div>
+          <div className="info-item"><label>Task Pass</label><span className={`pill ${rateClass(rate)}`}>{rate.toFixed(1)}%</span><span className="info-sub">{pass}/{tasks.length}</span></div>
+          <div className="info-item"><label>Test Pass</label><span className={`pill ${rateClass(testRate)}`}>{testRate.toFixed(1)}%</span><span className="info-sub">{passedTests}/{totalTests}</span></div>
         </div>
         <ResultBar pass={pass} fail={fail} error={err} />
         <div className="result-legend">
@@ -78,16 +82,34 @@ export default function JobPage() {
             <input className="search small" placeholder="Search task…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div className="task-scroll">
-            {filtered.map(t => (
-              <div key={t.name} className={`task-row ${task?.name === t.name ? "selected" : ""}`} onClick={() => openTask(t.name)}>
-                <span className={`icon ${t.passed ? "pass" : "fail"}`}>{t.passed ? "✓" : "✗"}</span>
-                <span className="task-name">{t.name}</span>
-                {t.duration && <span className="dur-tag">{t.duration}</span>}
-                {t.cost && <span className="cost-tag">{t.cost}</span>}
-                {t.tests_total > 0 && <span className={`tests-tag ${t.tests_passed === t.tests_total ? "all-pass" : ""}`}>{t.tests_passed}/{t.tests_total}</span>}
-                {t.error_type && <span className="err-tag">{t.error_type.replace("Error", "")}</span>}
-              </div>
-            ))}
+            <table className="task-table">
+              <thead><tr>
+                <th style={{width:28}}></th>
+                <th>Task</th>
+                <th className="r">Time</th>
+                <th className="r">Tests</th>
+                <th className="r">Cost</th>
+                <th>Note</th>
+              </tr></thead>
+              <tbody>
+                {filtered.map(t => (
+                  <tr key={t.name} className={`row ${task?.name === t.name ? "selected-row" : ""}`} onClick={() => openTask(t.name)}>
+                    <td><span className={`icon ${t.passed ? "pass" : "fail"}`}>{t.passed ? "✓" : "✗"}</span></td>
+                    <td className="task-name-cell">{t.name}</td>
+                    <td className="r dim mono">{t.duration || "—"}</td>
+                    <td className="r mono">
+                      {t.tests_total > 0 ? (
+                        <span className={t.tests_passed === t.tests_total ? "tc-all-pass" : t.tests_passed > 0 ? "tc-partial" : "tc-none"}>
+                          {t.tests_passed}/{t.tests_total}
+                        </span>
+                      ) : "—"}
+                    </td>
+                    <td className="r">{t.cost ? <span className="cost-tag">{t.cost}</span> : "—"}</td>
+                    <td>{t.error_type && <span className="err-tag">{t.error_type.replace("Error", "")}</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 

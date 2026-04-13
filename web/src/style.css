@@ -121,15 +121,20 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 .tab:hover { color: var(--text); background: var(--surface3); }
 .tab.active { background: var(--blue); color: #0a0e14; font-weight: 600; }
 
-/* Task list */
+/* Task table */
 .task-scroll { flex: 1; overflow-y: auto; }
-.task-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer; border-bottom: 1px solid var(--border); transition: all 0.1s; }
-.task-row:hover { background: var(--surface2); }
-.task-row.selected { background: var(--surface3); border-left: 3px solid var(--blue); padding-left: 11px; }
-.task-row .icon { font-weight: 700; width: 20px; text-align: center; font-size: 13px; }
+.task-table { width: 100%; border-collapse: collapse; }
+.task-table th { position: sticky; top: 0; background: var(--surface); z-index: 1; padding: 6px 10px; font-size: 11px; }
+.task-table td { padding: 6px 10px; font-size: 13px; }
+.task-name-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selected-row { background: var(--surface3) !important; border-left: 3px solid var(--blue); }
+.tc-all-pass { color: var(--green); }
+.tc-partial { color: var(--yellow); }
+.tc-none { color: var(--red); }
+.info-sub { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.icon { font-weight: 700; }
 .icon.pass { color: var(--green); }
 .icon.fail { color: var(--red); }
-.task-name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .err-tag { font-size: 10px; color: var(--yellow); background: var(--yellow-bg); padding: 2px 7px; border-radius: 4px; font-weight: 500; }
 .dur-tag { font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
 .cost-tag { font-size: 10px; color: var(--purple); background: rgba(167,139,250,0.08); padding: 2px 6px; border-radius: 4px; }
