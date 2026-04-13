@@ -229,13 +229,59 @@ def get_job(config: str, timestamp: str):
     task_list = []
     for name in sorted(tasks):
         t = tasks[name]
+        trial_dir = None
         log_size = 0
+        duration = ""
+        cost = ""
+
         for d in job_dir.iterdir():
             if d.is_dir() and d.name.startswith(name + "__"):
-                agent_dir = d / "agent"
-                if agent_dir.exists():
-                    log_size = sum(f.stat().st_size for f in agent_dir.iterdir() if f.is_file())
+                trial_dir = d
                 break
+
+        if trial_dir:
+            agent_dir = trial_dir / "agent"
+            if agent_dir.exists():
+                log_size = sum(f.stat().st_size for f in agent_dir.iterdir() if f.is_file())
+
+            # Duration from trial result.json
+            trf = trial_dir / "result.json"
+            if trf.exists():
+                try:
+                    tr = json.load(open(trf))
+                    duration = _duration_str(
+                        tr.get("started_at", "").replace("Z", "+00:00"),
+                        tr.get("finished_at", "").replace("Z", "+00:00"),
+                    )
+                except Exception:
+                    pass
+
+            # Cost from agent log
+            if agent_dir and agent_dir.exists():
+                for f in agent_dir.iterdir():
+                    if not f.is_file() or f.suffix != ".txt":
+                        continue
+                    try:
+                        import re
+                        text = f.read_text(errors="ignore")
+                        # CC: stream-json with total_cost_usd
+                        for line in text.splitlines():
+                            if '"total_cost_usd"' in line:
+                                try:
+                                    d2 = json.loads(line.strip())
+                                    if d2.get("type") == "result":
+                                        cost = f"${d2['total_cost_usd']:.3f}"
+                                        break
+                                except Exception:
+                                    pass
+                        if not cost:
+                            # Kiro: Credits: 0.44
+                            credits = re.findall(r"Credits:\s*([\d.]+)", text)
+                            if credits:
+                                cost = f"{sum(float(c) for c in credits):.2f} cr"
+                    except Exception:
+                        pass
+                    break
 
         task_list.append({
             "name": name,
@@ -243,6 +289,8 @@ def get_job(config: str, timestamp: str):
             "reward": t["reward"],
             "error_type": t.get("error_type"),
             "log_size": log_size,
+            "duration": duration,
+            "cost": cost,
         })
 
     return {

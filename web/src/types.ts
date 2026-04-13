@@ -26,6 +26,8 @@ export interface TaskResult {
   reward: number;
   error_type: string | null;
   log_size: number;
+  duration: string;
+  cost: string;
 }
 
 export interface JobDetail {

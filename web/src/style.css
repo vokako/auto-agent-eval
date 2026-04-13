@@ -131,6 +131,8 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 .icon.fail { color: var(--red); }
 .task-name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .err-tag { font-size: 10px; color: var(--yellow); background: var(--yellow-bg); padding: 2px 7px; border-radius: 4px; font-weight: 500; }
+.dur-tag { font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.cost-tag { font-size: 10px; color: var(--purple); background: rgba(167,139,250,0.08); padding: 2px 6px; border-radius: 4px; }
 .size-tag { font-size: 10px; color: var(--muted); }
 
 /* Detail panel */

@@ -82,8 +82,9 @@ export default function JobPage() {
               <div key={t.name} className={`task-row ${task?.name === t.name ? "selected" : ""}`} onClick={() => openTask(t.name)}>
                 <span className={`icon ${t.passed ? "pass" : "fail"}`}>{t.passed ? "✓" : "✗"}</span>
                 <span className="task-name">{t.name}</span>
+                {t.duration && <span className="dur-tag">{t.duration}</span>}
+                {t.cost && <span className="cost-tag">{t.cost}</span>}
                 {t.error_type && <span className="err-tag">{t.error_type.replace("Error", "")}</span>}
-                {t.log_size > 0 && <span className="size-tag">{fmtSize(t.log_size)}</span>}
               </div>
             ))}
           </div>
