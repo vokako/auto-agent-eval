@@ -1,7 +1,7 @@
 export interface JobSummary {
   id: string;
   config: string;
-  timestamp: string;
+  started_at: string;
   agent: string;
   model: string;
   passed: number;
@@ -24,11 +24,13 @@ export interface TaskResult {
 export interface JobDetail {
   config: string;
   timestamp: string;
+  agent: string;
+  model: string;
   tasks: TaskResult[];
-  n_trials: number;
-  n_errors: number;
   started_at: string;
   finished_at: string | null;
+  n_trials: number;
+  n_errors: number;
 }
 
 export interface TaskDetail {

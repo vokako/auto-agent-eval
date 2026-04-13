@@ -24,7 +24,7 @@ def _parse_result(result_file: Path) -> dict:
     data = json.load(open(result_file))
     evals = data.get("stats", {}).get("evals", {})
     if not evals:
-        return {"tasks": {}, "meta": data}
+        return {"tasks": {}, "started_at": data.get("started_at"), "finished_at": data.get("finished_at")}
 
     ev = next(iter(evals.values()))
     rs = ev.get("reward_stats", {}).get("reward", {})
@@ -52,6 +52,43 @@ def _parse_result(result_file: Path) -> dict:
     }
 
 
+def _read_agent_info(job_dir: Path) -> tuple[str, str]:
+    config_f = job_dir / "config.json"
+    if not config_f.exists():
+        return "", ""
+    try:
+        cfg = json.load(open(config_f))
+        agents = cfg.get("agents", [])
+        if agents:
+            a = agents[0]
+            import_path = a.get("import_path", "") or ""
+            # Extract agent name from import path like "agents.kiro_cli.harbor_agent:KiroCliAgent"
+            name = a.get("name") or ""
+            if not name and import_path:
+                name = import_path.split(":")[1].replace("Agent", "").replace("Cli", " CLI") if ":" in import_path else import_path
+            model = a.get("model_name", "") or ""
+            return name, model
+    except Exception:
+        pass
+    return "", ""
+
+
+def _duration_str(started: str | None, finished: str | None) -> str:
+    if not started or not finished:
+        return ""
+    try:
+        s = datetime.fromisoformat(started)
+        e = datetime.fromisoformat(finished)
+        secs = int((e - s).total_seconds())
+        if secs < 60:
+            return f"{secs}s"
+        hours, rem = divmod(secs, 3600)
+        mins, _ = divmod(rem, 60)
+        return f"{hours}h{mins:02d}m" if hours else f"{mins}m"
+    except Exception:
+        return ""
+
+
 @app.get("/api/jobs")
 def list_jobs():
     if not JOBS_DIR.exists():
@@ -59,10 +96,7 @@ def list_jobs():
 
     jobs = []
     for config_dir in sorted(JOBS_DIR.iterdir()):
-        if not config_dir.is_dir():
-            continue
-        # Skip if this dir itself has result.json (old flat structure)
-        if (config_dir / "result.json").exists():
+        if not config_dir.is_dir() or (config_dir / "result.json").exists():
             continue
         for job_dir in sorted(config_dir.iterdir(), reverse=True):
             rf = job_dir / "result.json"
@@ -72,39 +106,16 @@ def list_jobs():
                 parsed = _parse_result(rf)
                 tasks = parsed["tasks"]
                 passed = sum(1 for t in tasks.values() if t["passed"])
-                errors = sum(1 for t in tasks.values() if t.get("error_type"))
                 total = len(tasks)
-
-                started = parsed.get("started_at", "")
+                errors = sum(1 for t in tasks.values() if t.get("error_type"))
+                agent_name, model_name = _read_agent_info(job_dir)
+                started = parsed.get("started_at")
                 finished = parsed.get("finished_at")
-                duration = ""
-                if started and finished:
-                    try:
-                        s = datetime.fromisoformat(started)
-                        e = datetime.fromisoformat(finished)
-                        dur = e - s
-                        hours, rem = divmod(int(dur.total_seconds()), 3600)
-                        mins, _ = divmod(rem, 60)
-                        duration = f"{hours}h{mins:02d}m"
-                    except Exception:
-                        pass
-
-                # Read config.json for agent/model info
-                config_f = job_dir / "config.json"
-                agent_name = ""
-                model_name = ""
-                if config_f.exists():
-                    try:
-                        cfg = json.load(open(config_f))
-                        agent_name = cfg.get("agent", {}).get("name", "")
-                        model_name = cfg.get("agent", {}).get("model_name", "")
-                    except Exception:
-                        pass
 
                 jobs.append({
                     "id": f"{config_dir.name}/{job_dir.name}",
                     "config": config_dir.name,
-                    "timestamp": started or job_dir.name,
+                    "started_at": started,
                     "agent": agent_name,
                     "model": model_name,
                     "passed": passed,
@@ -112,7 +123,7 @@ def list_jobs():
                     "errors": errors,
                     "total": total,
                     "rate": round(passed / total * 100, 1) if total else 0,
-                    "duration": duration,
+                    "duration": _duration_str(started, finished),
                     "finished": finished is not None,
                 })
             except Exception:
@@ -129,24 +140,18 @@ def get_job(config: str, timestamp: str):
 
     parsed = _parse_result(rf)
     tasks = parsed["tasks"]
+    agent_name, model_name = _read_agent_info(job_dir)
 
     task_list = []
     for name in sorted(tasks):
         t = tasks[name]
-        # Get agent log size
-        trial_dir = None
+        log_size = 0
         for d in job_dir.iterdir():
             if d.is_dir() and d.name.startswith(name + "__"):
-                trial_dir = d
+                agent_dir = d / "agent"
+                if agent_dir.exists():
+                    log_size = sum(f.stat().st_size for f in agent_dir.iterdir() if f.is_file())
                 break
-
-        log_size = 0
-        if trial_dir:
-            agent_dir = trial_dir / "agent"
-            if agent_dir.exists():
-                for f in agent_dir.iterdir():
-                    if f.is_file():
-                        log_size += f.stat().st_size
 
         task_list.append({
             "name": name,
@@ -159,8 +164,13 @@ def get_job(config: str, timestamp: str):
     return {
         "config": config,
         "timestamp": timestamp,
+        "agent": agent_name,
+        "model": model_name,
         "tasks": task_list,
-        **{k: v for k, v in parsed.items() if k != "tasks"},
+        "started_at": parsed.get("started_at"),
+        "finished_at": parsed.get("finished_at"),
+        "n_trials": parsed.get("n_trials", 0),
+        "n_errors": parsed.get("n_errors", 0),
     }
 
 
@@ -168,17 +178,14 @@ def get_job(config: str, timestamp: str):
 def get_task(config: str, timestamp: str, task_name: str):
     job_dir = JOBS_DIR / config / timestamp
 
-    # Find trial dir
     trial_dir = None
     for d in job_dir.iterdir():
         if d.is_dir() and d.name.startswith(task_name + "__"):
             trial_dir = d
             break
-
     if not trial_dir:
         raise HTTPException(404, "Task not found")
 
-    # Load instruction
     instruction = ""
     task_cache = HARBOR_CACHE / task_name
     if task_cache.exists():
@@ -187,7 +194,6 @@ def get_task(config: str, timestamp: str, task_name: str):
                 instruction = (Path(root) / "instruction.md").read_text(errors="ignore")
                 break
 
-    # Load agent log
     agent_log = ""
     agent_dir = trial_dir / "agent"
     if agent_dir.exists():
@@ -196,7 +202,6 @@ def get_task(config: str, timestamp: str, task_name: str):
                 agent_log = f.read_text(errors="ignore")
                 break
 
-    # Load verifier log
     verifier_log = ""
     verifier_dir = trial_dir / "verifier"
     if verifier_dir.exists():
@@ -205,7 +210,6 @@ def get_task(config: str, timestamp: str, task_name: str):
                 verifier_log = f.read_text(errors="ignore")
                 break
 
-    # Load trial log
     trial_log = ""
     trial_log_f = trial_dir / "trial.log"
     if trial_log_f.exists():
@@ -214,7 +218,7 @@ def get_task(config: str, timestamp: str, task_name: str):
     return {
         "name": task_name,
         "instruction": instruction,
-        "agent_log": agent_log[-100000:],  # cap at 100KB
+        "agent_log": agent_log[-100000:],
         "verifier_log": verifier_log[-50000:],
         "trial_log": trial_log[-20000:],
     }
@@ -230,37 +234,29 @@ def compare(ids: str):
             continue
         rf = JOBS_DIR / parts[0] / parts[1] / "result.json"
         if rf.exists():
-            parsed = _parse_result(rf)
-            results[jid] = parsed["tasks"]
+            results[jid] = _parse_result(rf)["tasks"]
 
     if not results:
         raise HTTPException(404, "No jobs found")
 
-    # Build comparison table
     all_tasks = sorted(set().union(*(r.keys() for r in results.values())))
     rows = []
     for task in all_tasks:
         row = {"name": task}
         for jid in job_ids:
             t = results.get(jid, {}).get(task)
-            if t:
-                row[jid] = {"passed": t["passed"], "error_type": t.get("error_type")}
-            else:
-                row[jid] = None
+            row[jid] = {"passed": t["passed"], "error_type": t.get("error_type")} if t else None
         rows.append(row)
 
     summary = {}
     for jid in job_ids:
         tasks = results.get(jid, {})
-        summary[jid] = {
-            "passed": sum(1 for t in tasks.values() if t["passed"]),
-            "total": len(tasks),
-        }
+        summary[jid] = {"passed": sum(1 for t in tasks.values() if t["passed"]), "total": len(tasks)}
 
     return {"jobs": job_ids, "tasks": rows, "summary": summary}
 
 
-# Serve frontend static files
+# Serve frontend
 DIST_DIR = PROJECT_ROOT / "web" / "dist"
 if DIST_DIR.exists():
     @app.get("/{path:path}")
