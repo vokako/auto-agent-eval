@@ -1,55 +1,51 @@
-export interface RunSummary {
-  dir_name: string;
-  suite: string;
+export interface JobSummary {
+  id: string;
+  config: string;
   timestamp: string;
-  agents: string[];
-  tasks: string[];
-  overall: { score: number; passed: number; total: number };
-  by_agent: Record<string, number>;
-  by_category: Record<string, number>;
-  runs: RunEntry[];
-}
-
-export interface RunEntry {
-  task: string;
   agent: string;
-  score: number;
-  passed: boolean;
-  duration: number;
-  status: string;
+  model: string;
+  passed: number;
+  failed: number;
+  errors: number;
+  total: number;
+  rate: number;
+  duration: string;
+  finished: boolean;
 }
 
-export interface MetricResult {
-  metric_id: string;
-  metric_name: string;
-  score: number;
+export interface TaskResult {
+  name: string;
   passed: boolean;
-  reason: string;
-  raw_output: string;
+  reward: number;
+  error_type: string | null;
+  log_size: number;
+}
+
+export interface JobDetail {
+  config: string;
+  timestamp: string;
+  tasks: TaskResult[];
+  n_trials: number;
+  n_errors: number;
+  started_at: string;
+  finished_at: string | null;
 }
 
 export interface TaskDetail {
-  id: string;
-  task_id: string;
-  agent_id: string;
-  status: string;
-  result: {
-    score: number;
-    passed: boolean;
-    metrics: MetricResult[];
-    duration_seconds: number;
-    agent_output_length: number;
-    timestamp: string;
-  };
+  name: string;
+  instruction: string;
+  agent_log: string;
+  verifier_log: string;
+  trial_log: string;
 }
 
-export interface RunDetail extends RunSummary {
-  task_details: Record<string, TaskDetail>;
-  workspaces: Record<string, WorkspaceFile[]>;
-  logs: Record<string, string>;
+export interface CompareRow {
+  name: string;
+  [jobId: string]: { passed: boolean; error_type?: string } | string | null;
 }
 
-export interface WorkspaceFile {
-  path: string;
-  size: number;
+export interface CompareResult {
+  jobs: string[];
+  tasks: CompareRow[];
+  summary: Record<string, { passed: number; total: number }>;
 }

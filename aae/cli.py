@@ -273,6 +273,12 @@ def _save_results(results: RunEvalResult, path: Path):
     json.dump(to_dict(results), open(path, "w"), indent=2, ensure_ascii=False)
 
 
+def cmd_serve(args):
+    import uvicorn
+    print(f"Starting AAE dashboard on http://0.0.0.0:{args.port}")
+    uvicorn.run("aae.server:app", host="0.0.0.0", port=args.port, reload=args.reload)
+
+
 def main():
     parser = argparse.ArgumentParser(prog="aae", description="Agent Eval (Harbor)")
     sub = parser.add_subparsers(dest="command")
@@ -301,6 +307,11 @@ def main():
 
     p_list = sub.add_parser("list", help="List available tasks")
     p_list.set_defaults(func=cmd_list)
+
+    p_serve = sub.add_parser("serve", help="Start web dashboard")
+    p_serve.add_argument("-p", "--port", type=int, default=8080)
+    p_serve.add_argument("--reload", action="store_true")
+    p_serve.set_defaults(func=cmd_serve)
 
     args = parser.parse_args()
     if not args.command:
