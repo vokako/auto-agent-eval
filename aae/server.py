@@ -283,6 +283,19 @@ def get_job(config: str, timestamp: str):
                         pass
                     break
 
+        # Test case counts from ctrf.json
+        tests_passed = 0
+        tests_total = 0
+        if trial_dir:
+            ctrf_f = trial_dir / "verifier" / "ctrf.json"
+            if ctrf_f.exists():
+                try:
+                    s = json.load(open(ctrf_f)).get("results", {}).get("summary", {})
+                    tests_total = s.get("tests", 0)
+                    tests_passed = s.get("passed", 0)
+                except Exception:
+                    pass
+
         task_list.append({
             "name": name,
             "passed": t["passed"],
@@ -291,6 +304,8 @@ def get_job(config: str, timestamp: str):
             "log_size": log_size,
             "duration": duration,
             "cost": cost,
+            "tests_passed": tests_passed,
+            "tests_total": tests_total,
         })
 
     return {
@@ -350,12 +365,28 @@ def get_task(config: str, timestamp: str, task_name: str):
     if trial_log_f.exists():
         trial_log = trial_log_f.read_text(errors="ignore")
 
+    # Test case breakdown from ctrf.json
+    test_cases = []
+    ctrf_f = trial_dir / "verifier" / "ctrf.json"
+    if ctrf_f.exists():
+        try:
+            ctrf = json.load(open(ctrf_f))
+            for t in ctrf.get("results", {}).get("tests", []):
+                test_cases.append({
+                    "name": t.get("name", "").split("::")[-1],
+                    "status": t.get("status", ""),
+                    "duration": round(t.get("duration", 0), 2),
+                })
+        except Exception:
+            pass
+
     return {
         "name": task_name,
         "instruction": instruction,
         "agent_log": agent_log[-100000:],
         "verifier_log": verifier_log[-50000:],
         "trial_log": trial_log[-20000:],
+        "test_cases": test_cases,
     }
 
 

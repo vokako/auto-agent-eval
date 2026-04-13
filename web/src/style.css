@@ -133,6 +133,8 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 .err-tag { font-size: 10px; color: var(--yellow); background: var(--yellow-bg); padding: 2px 7px; border-radius: 4px; font-weight: 500; }
 .dur-tag { font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
 .cost-tag { font-size: 10px; color: var(--purple); background: rgba(167,139,250,0.08); padding: 2px 6px; border-radius: 4px; }
+.tests-tag { font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.tests-tag.all-pass { color: var(--green); }
 .size-tag { font-size: 10px; color: var(--muted); }
 
 /* Detail panel */
@@ -143,6 +145,14 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 .detail-tabs summary { cursor: pointer; padding: 8px 0; color: var(--blue); font-size: 13px; font-weight: 500; }
 .detail-tabs summary:hover { color: var(--text); }
 .log-content { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; font-size: 12px; font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; line-height: 1.6; overflow-x: auto; max-height: 420px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: var(--dim); }
+
+/* Test cases */
+.test-cases { padding: 4px 0; }
+.test-case { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 4px; font-size: 13px; }
+.test-case.passed { color: var(--text); }
+.test-case.failed { color: var(--red); background: var(--red-bg); }
+.tc-name { flex: 1; font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; font-size: 12px; }
+.tc-dur { color: var(--muted); font-size: 11px; }
 
 /* Compare */
 .cmp-cards { display: flex; gap: 14px; margin-bottom: 20px; }

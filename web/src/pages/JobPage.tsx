@@ -84,6 +84,7 @@ export default function JobPage() {
                 <span className="task-name">{t.name}</span>
                 {t.duration && <span className="dur-tag">{t.duration}</span>}
                 {t.cost && <span className="cost-tag">{t.cost}</span>}
+                {t.tests_total > 0 && <span className={`tests-tag ${t.tests_passed === t.tests_total ? "all-pass" : ""}`}>{t.tests_passed}/{t.tests_total}</span>}
                 {t.error_type && <span className="err-tag">{t.error_type.replace("Error", "")}</span>}
               </div>
             ))}
@@ -98,7 +99,21 @@ export default function JobPage() {
             </div>
             {taskLoading ? <div className="loading">Loading…</div> : (
               <div className="detail-tabs">
-                <TabSection title="📋 Instruction" content={task.instruction} defaultOpen />
+                {task.test_cases.length > 0 && (
+                  <details open>
+                    <summary>🧪 Tests ({task.test_cases.filter(t => t.status === "passed").length}/{task.test_cases.length} passed)</summary>
+                    <div className="test-cases">
+                      {task.test_cases.map((tc, i) => (
+                        <div key={i} className={`test-case ${tc.status}`}>
+                          <span className={`icon ${tc.status === "passed" ? "pass" : "fail"}`}>{tc.status === "passed" ? "✓" : "✗"}</span>
+                          <span className="tc-name">{tc.name}</span>
+                          {tc.duration > 0 && <span className="tc-dur">{tc.duration}s</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+                <TabSection title="📋 Instruction" content={task.instruction} defaultOpen={task.test_cases.length === 0} />
                 <TabSection title={`🤖 Agent Log (${fmtSize(task.agent_log.length)})`} content={task.agent_log} />
                 <TabSection title="🧪 Verifier Log" content={task.verifier_log} />
                 <TabSection title="📝 Trial Log" content={task.trial_log} />

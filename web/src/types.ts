@@ -28,6 +28,8 @@ export interface TaskResult {
   log_size: number;
   duration: string;
   cost: string;
+  tests_passed: number;
+  tests_total: number;
 }
 
 export interface JobDetail {
@@ -45,12 +47,19 @@ export interface JobDetail {
   n_errors: number;
 }
 
+export interface TestCase {
+  name: string;
+  status: string;
+  duration: number;
+}
+
 export interface TaskDetail {
   name: string;
   instruction: string;
   agent_log: string;
   verifier_log: string;
   trial_log: string;
+  test_cases: TestCase[];
 }
 
 export interface CompareRow {
