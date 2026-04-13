@@ -22,6 +22,9 @@ export default function App() {
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [compareResult, setCompareResult] = useState<CompareResult | null>(null);
   const [filter, setFilter] = useState<"all" | "pass" | "fail" | "error">("all");
+  const [sortKey, setSortKey] = useState<string>("timestamp");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [configFilter, setConfigFilter] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -64,6 +67,29 @@ export default function App() {
 
   if (loading) return <div className="loading">Loading...</div>;
 
+  const toggleSort = (key: string) => {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else { setSortKey(key); setSortAsc(key === "config"); }
+  };
+  const sortIcon = (key: string) => sortKey === key ? (sortAsc ? " ↑" : " ↓") : "";
+
+  const sortedJobs = [...jobs]
+    .filter(j => !configFilter || j.config.includes(configFilter))
+    .sort((a, b) => {
+      let va: any, vb: any;
+      switch (sortKey) {
+        case "config": va = a.config; vb = b.config; break;
+        case "agent": va = a.agent; vb = b.agent; break;
+        case "passed": va = a.passed; vb = b.passed; break;
+        case "rate": va = a.rate; vb = b.rate; break;
+        case "errors": va = a.errors; vb = b.errors; break;
+        case "total": va = a.total; vb = b.total; break;
+        default: va = a.timestamp; vb = b.timestamp;
+      }
+      const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+      return sortAsc ? cmp : -cmp;
+    });
+
   return (
     <div className="app">
       <header>
@@ -77,21 +103,31 @@ export default function App() {
 
       {page === "dashboard" && (
         <div className="dashboard">
+          <div className="dashboard-toolbar">
+            <input
+              type="text"
+              placeholder="Filter by config..."
+              value={configFilter}
+              onChange={e => setConfigFilter(e.target.value)}
+              className="filter-input"
+            />
+            <span className="job-count">{sortedJobs.length} jobs</span>
+          </div>
           <table>
             <thead>
               <tr>
                 <th></th>
-                <th>Config</th>
-                <th>Agent / Model</th>
-                <th>Resolved</th>
-                <th>Rate</th>
-                <th>Errors</th>
+                <th className="sortable" onClick={() => toggleSort("config")}>Config{sortIcon("config")}</th>
+                <th className="sortable" onClick={() => toggleSort("agent")}>Agent / Model{sortIcon("agent")}</th>
+                <th className="sortable" onClick={() => toggleSort("passed")}>Resolved{sortIcon("passed")}</th>
+                <th className="sortable" onClick={() => toggleSort("rate")}>Rate{sortIcon("rate")}</th>
+                <th className="sortable" onClick={() => toggleSort("errors")}>Errors{sortIcon("errors")}</th>
                 <th>Duration</th>
-                <th>Time</th>
+                <th className="sortable" onClick={() => toggleSort("timestamp")}>Time{sortIcon("timestamp")}</th>
               </tr>
             </thead>
             <tbody>
-              {jobs.map(j => (
+              {sortedJobs.map(j => (
                 <tr key={j.id} onClick={() => openJob(j.id)} className="clickable">
                   <td>
                     <input

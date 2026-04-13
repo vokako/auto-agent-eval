@@ -36,8 +36,17 @@ header h1:hover { color: var(--accent); }
 
 /* Dashboard */
 .dashboard { margin-top: 16px; }
+.dashboard-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.filter-input {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 12px; border-radius: 6px; font-size: 14px; width: 240px;
+}
+.filter-input::placeholder { color: var(--text2); }
+.job-count { color: var(--text2); font-size: 13px; }
 .dashboard table { width: 100%; border-collapse: collapse; }
 .dashboard th { text-align: left; padding: 8px 12px; color: var(--text2); font-size: 13px; border-bottom: 1px solid var(--border); }
+.dashboard th.sortable { cursor: pointer; user-select: none; }
+.dashboard th.sortable:hover { color: var(--accent); }
 .dashboard td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
 .clickable { cursor: pointer; }
 .clickable:hover { background: var(--surface); }
