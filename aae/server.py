@@ -104,7 +104,7 @@ def list_jobs():
                 jobs.append({
                     "id": f"{config_dir.name}/{job_dir.name}",
                     "config": config_dir.name,
-                    "timestamp": job_dir.name,
+                    "timestamp": started or job_dir.name,
                     "agent": agent_name,
                     "model": model_name,
                     "passed": passed,

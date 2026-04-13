@@ -5,6 +5,14 @@ import "./style.css";
 
 type Page = "dashboard" | "job" | "compare";
 
+function formatTime(ts: string): string {
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return ts;
+    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch { return ts; }
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>("dashboard");
   const [jobs, setJobs] = useState<JobSummary[]>([]);
@@ -103,7 +111,7 @@ export default function App() {
                   </td>
                   <td className="num">{j.errors || "—"}</td>
                   <td className="num">{j.duration || "—"}</td>
-                  <td className="ts">{j.timestamp}</td>
+                  <td className="ts">{formatTime(j.timestamp)}</td>
                 </tr>
               ))}
             </tbody>
@@ -117,7 +125,7 @@ export default function App() {
             <button className="btn-back" onClick={() => { setPage("dashboard"); setSelectedTask(null); }}>← Back</button>
             <h2>{selectedJob.config}</h2>
             <div className="job-meta">
-              <span>{selectedJob.timestamp}</span>
+              <span>{formatTime(selectedJob.started_at)}</span>
               <span className="badge pass">{selectedJob.tasks.filter(t => t.passed).length} pass</span>
               <span className="badge fail">{selectedJob.tasks.filter(t => !t.passed).length} fail</span>
               {selectedJob.n_errors > 0 && <span className="badge error">{selectedJob.n_errors} errors</span>}
