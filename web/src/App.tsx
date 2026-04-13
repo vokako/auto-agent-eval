@@ -109,6 +109,7 @@ export default function App() {
           <th style={{width: 32}}></th>
           <th className="sort" onClick={() => toggleSort("config")}>Config{arrow("config")}</th>
           <th className="sort" onClick={() => toggleSort("agent")}>Agent{arrow("agent")}</th>
+          <th>Adapter</th>
           <th className="sort r" onClick={() => toggleSort("total")}>Tasks{arrow("total")}</th>
           <th className="sort r" onClick={() => toggleSort("passed")}>Pass{arrow("passed")}</th>
           <th className="sort r" onClick={() => toggleSort("rate")}>Rate{arrow("rate")}</th>
@@ -121,6 +122,7 @@ export default function App() {
             <td><input type="checkbox" checked={compareIds.has(j.id)} onClick={e => toggleCmp(j.id, e)} readOnly /></td>
             <td className="bold">{j.config}</td>
             <td className="dim">{j.agent || "—"} <span className="muted">/ {j.model || "?"}</span></td>
+            <td><span className={`adapter-tag ${j.adapter}`}>{j.adapter}</span>{j.version && <span className="ver-tag">v{j.version}</span>}</td>
             <td className="r mono">{j.total}</td>
             <td className="r mono">{j.passed}</td>
             <td className="r"><span className={`pill ${j.rate >= 50 ? "green" : j.rate >= 30 ? "yellow" : "red"}`}>{j.rate}%</span></td>
@@ -155,6 +157,7 @@ export default function App() {
           <div className="info-grid">
             <div className="info-item"><label>Agent</label><span>{job.agent || "—"}</span></div>
             <div className="info-item"><label>Model</label><span>{job.model || "—"}</span></div>
+            <div className="info-item"><label>Adapter</label><span className={`adapter-tag ${job.adapter}`}>{job.adapter}</span>{job.version && <span className="ver-tag">v{job.version}</span>}</div>
             <div className="info-item"><label>Date</label><span>{fmtTime(job.started_at)}</span></div>
             <div className="info-item"><label>Rate</label><span className={`pill ${pass/tasks.length >= .5 ? "green" : "yellow"}`}>{(pass/tasks.length*100).toFixed(1)}%</span></div>
           </div>

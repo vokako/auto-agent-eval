@@ -62,7 +62,6 @@ def _read_agent_info(job_dir: Path) -> tuple[str, str]:
         if agents:
             a = agents[0]
             import_path = a.get("import_path", "") or ""
-            # Extract agent name from import path like "agents.kiro_cli.harbor_agent:KiroCliAgent"
             name = a.get("name") or ""
             if not name and import_path:
                 name = import_path.split(":")[1].replace("Agent", "").replace("Cli", " CLI") if ":" in import_path else import_path
@@ -71,6 +70,41 @@ def _read_agent_info(job_dir: Path) -> tuple[str, str]:
     except Exception:
         pass
     return "", ""
+
+
+def _agent_extra(job_dir: Path) -> dict:
+    """Get builtin/custom flag and agent version from config + first trial log."""
+    info = {"builtin": False, "version": ""}
+    config_f = job_dir / "config.json"
+    if not config_f.exists():
+        return info
+    try:
+        a = json.load(open(config_f)).get("agents", [{}])[0]
+        info["builtin"] = bool(a.get("name"))
+    except Exception:
+        return info
+
+    # Extract version from first agent log
+    import re
+    for d in job_dir.iterdir():
+        if not d.is_dir() or not ("__" in d.name):
+            continue
+        agent_dir = d / "agent"
+        if not agent_dir.exists():
+            continue
+        for f in agent_dir.iterdir():
+            if not f.is_file() or f.suffix != ".txt":
+                continue
+            try:
+                head = f.read_text(errors="ignore")[:3000]
+                m = re.search(r'"claude_code_version"\s*:\s*"([^"]+)"', head)
+                if m:
+                    info["version"] = m.group(1)
+                    return info
+            except Exception:
+                pass
+        break
+    return info
 
 
 def _duration_str(started: str | None, finished: str | None) -> str:
@@ -109,6 +143,7 @@ def list_jobs():
                 total = len(tasks)
                 errors = sum(1 for t in tasks.values() if t.get("error_type"))
                 agent_name, model_name = _read_agent_info(job_dir)
+                extra = _agent_extra(job_dir)
                 started = parsed.get("started_at")
                 finished = parsed.get("finished_at")
 
@@ -118,6 +153,8 @@ def list_jobs():
                     "started_at": started,
                     "agent": agent_name,
                     "model": model_name,
+                    "adapter": "built-in" if extra["builtin"] else "custom",
+                    "version": extra["version"],
                     "passed": passed,
                     "failed": total - passed,
                     "errors": errors,
@@ -141,6 +178,7 @@ def get_job(config: str, timestamp: str):
     parsed = _parse_result(rf)
     tasks = parsed["tasks"]
     agent_name, model_name = _read_agent_info(job_dir)
+    extra = _agent_extra(job_dir)
 
     task_list = []
     for name in sorted(tasks):
@@ -166,6 +204,8 @@ def get_job(config: str, timestamp: str):
         "timestamp": timestamp,
         "agent": agent_name,
         "model": model_name,
+        "adapter": "built-in" if extra["builtin"] else "custom",
+        "version": extra["version"],
         "tasks": task_list,
         "started_at": parsed.get("started_at"),
         "finished_at": parsed.get("finished_at"),

@@ -4,6 +4,8 @@ export interface JobSummary {
   started_at: string;
   agent: string;
   model: string;
+  adapter: string;
+  version: string;
   passed: number;
   failed: number;
   errors: number;
@@ -26,6 +28,8 @@ export interface JobDetail {
   timestamp: string;
   agent: string;
   model: string;
+  adapter: string;
+  version: string;
   tasks: TaskResult[];
   started_at: string;
   finished_at: string | null;
