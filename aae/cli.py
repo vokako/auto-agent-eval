@@ -1,9 +1,10 @@
-"""CLI entry point for AAE."""
+"""CLI entry point for AAE — runs Harbor benchmarks and optional LLM judge."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -11,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from aae import tb, judge, rules, composite
+from aae import harbor, judge, rules, composite
 from aae.models import TaskEvalResult, RunEvalResult
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -22,147 +23,81 @@ def _load_task_config(task_name: str) -> dict:
     return yaml.safe_load(path.read_text())
 
 
-def _build_tb_command(cfg: dict, run_id: str) -> list[str]:
-    """Build the `tb run` command from task config."""
+def _load_task_list(filename: str) -> list[str]:
+    path = PROJECT_ROOT / "tasks" / filename
+    return [
+        line.strip()
+        for line in path.read_text().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+
+def _expand_env(val: str) -> str:
+    if isinstance(val, str) and val.startswith("${") and val.endswith("}"):
+        return os.environ.get(val[2:-1], "")
+    return str(val)
+
+
+def _build_harbor_command(cfg: dict, jobs_dir: str) -> list[str]:
     agent_cfg = cfg.get("agent", {})
     run_cfg = cfg.get("run", {})
 
-    # Read import_path from agent's agent.yaml
-    agent_name = agent_cfg["name"]
-    agent_yaml = PROJECT_ROOT / "agents" / agent_name / "agent.yaml"
-    agent_meta = yaml.safe_load(agent_yaml.read_text())
-
     cmd = [
-        "tb", "run",
-        "--agent-import-path", agent_meta["import_path"],
-        "--dataset-path", str(PROJECT_ROOT / "datasets" / cfg["dataset"]),
-        "--n-concurrent", str(run_cfg.get("concurrent", 4)),
-        "--run-id", run_id,
+        "harbor", "run",
+        "-d", cfg["dataset"],
+        "--agent-import-path", agent_cfg["import_path"],
+        "-n", str(run_cfg.get("concurrent", 4)),
+        "--jobs-dir", jobs_dir,
     ]
 
-    # model → --model
     if agent_cfg.get("model"):
-        cmd.extend(["--model", agent_cfg["model"]])
+        cmd.extend(["-m", agent_cfg["model"]])
 
-    # kwargs → --agent-kwarg key=value
-    for key, value in agent_cfg.get("kwargs", {}).items():
-        cmd.extend(["--agent-kwarg", f"{key}={value}"])
+    for k, v in agent_cfg.get("env", {}).items():
+        cmd.extend(["--ae", f"{k}={_expand_env(v)}"])
 
-    # system_prompt → --agent-kwarg (special handling for multiline)
-    if agent_cfg.get("system_prompt"):
-        # Replace newlines with \n literal so it survives CLI parsing
-        sp = agent_cfg["system_prompt"].strip().replace("\n", "\\n")
-        cmd.extend(["--agent-kwarg", f"system_prompt={sp}"])
-
-    # task subset
-    for t in run_cfg.get("tasks", []):
-        cmd.extend(["--task-id", t])
+    # Task subset from task_list file
+    if cfg.get("task_list"):
+        tasks = _load_task_list(cfg["task_list"])
+        for t in tasks:
+            cmd.extend(["-i", t])
 
     return cmd
-
-
-def _find_completed_tasks(run_dir: Path) -> set[str]:
-    """Find tasks that already have results in a run directory."""
-    completed = set()
-    if not run_dir.exists():
-        return completed
-    for task_dir in run_dir.iterdir():
-        if not task_dir.is_dir():
-            continue
-        for trial_dir in task_dir.iterdir():
-            if (trial_dir / "results.json").exists():
-                completed.add(task_dir.name)
-    return completed
-
-
-def _find_latest_run(task_name: str) -> Path | None:
-    """Find the most recent run directory for a task."""
-    runs_dir = PROJECT_ROOT / "runs"
-    if not runs_dir.exists():
-        return None
-    matches = sorted(runs_dir.glob(f"{task_name}-*"), reverse=True)
-    return matches[0] if matches else None
 
 
 def cmd_run(args):
     cfg = _load_task_config(args.task)
     agent_cfg = cfg.get("agent", {})
-    run_cfg = cfg.get("run", {})
 
-    # Resume: find latest run and skip completed tasks
-    if args.resume:
-        existing_run = _find_latest_run(args.task)
-        if existing_run:
-            run_id = existing_run.name
-            completed = _find_completed_tasks(existing_run)
-            all_tasks = run_cfg.get("tasks", [])
-
-            if completed:
-                print(f"Resuming: {run_id} ({len(completed)} tasks already done)")
-                # Get remaining tasks
-                if all_tasks:
-                    remaining = [t for t in all_tasks if t not in completed]
-                else:
-                    # Full dataset — need to figure out what's left
-                    dataset_path = PROJECT_ROOT / "datasets" / cfg["dataset"]
-                    all_tasks = sorted(
-                        d.name for d in dataset_path.iterdir()
-                        if d.is_dir() and (d / "task.yaml").exists()
-                    )
-                    remaining = [t for t in all_tasks if t not in completed]
-
-                if not remaining:
-                    print("All tasks already completed.")
-                    return
-
-                print(f"  Remaining: {len(remaining)} tasks")
-                # Override tasks in config
-                run_cfg["tasks"] = remaining
-                cfg["run"] = run_cfg
-        else:
-            print(f"No previous run found for {args.task}, starting fresh.")
-            run_id = f"{args.task}-{datetime.now().strftime('%Y%m%d_%H%M')}"
-    else:
-        run_id = f"{args.task}-{datetime.now().strftime('%Y%m%d_%H%M')}"
-
-    cmd = _build_tb_command(cfg, run_id)
-    run_dir = PROJECT_ROOT / "runs" / run_id
-    log_file = PROJECT_ROOT / "runs" / f"{run_id}.log"
-    log_file.parent.mkdir(parents=True, exist_ok=True)
+    jobs_dir = str(PROJECT_ROOT / "jobs" / args.task)
+    cmd = _build_harbor_command(cfg, jobs_dir)
 
     print(f"Running: {args.task}")
     print(f"  dataset: {cfg['dataset']}")
     print(f"  agent:   {agent_cfg.get('name')} / {agent_cfg.get('model', 'auto')}")
-    if agent_cfg.get("kwargs"):
-        print(f"  kwargs:  {agent_cfg['kwargs']}")
-    print(f"  run_id:  {run_id}")
-    print(f"  log:     {log_file}")
+    print(f"  jobs:    {jobs_dir}")
     print(f"  cmd:     {' '.join(cmd)}")
     print()
 
-    with open(log_file, "w") as lf:
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT, stdout=lf, stderr=subprocess.STDOUT)
+    result = subprocess.run(cmd, cwd=PROJECT_ROOT)
 
-    # Move log into run dir after tb creates it
-    if run_dir.exists():
-        (run_dir / "aae.log").write_text(log_file.read_text())
-        log_file.unlink()
-
-    if result.returncode == 0:
+    if result.returncode == 0 and not args.no_judge:
         judge_cfg = cfg.get("judge")
-        if judge_cfg and not args.no_judge:
-            print("\nRunning agent judge...")
-            _run_judge(
-                run_dir=PROJECT_ROOT / "runs" / run_id,
-                model=judge_cfg.get("model", "claude-opus-4.6"),
-                rubric=judge_cfg.get("rubric", "default"),
-                failed_only=judge_cfg.get("failed_only", False),
-            )
+        if judge_cfg:
+            job_dir = harbor.find_latest_job(Path(jobs_dir))
+            if job_dir:
+                print("\nRunning agent judge...")
+                _run_judge(
+                    job_dir=job_dir,
+                    model=judge_cfg.get("model", "claude-opus-4.6"),
+                    rubric=judge_cfg.get("rubric", "default"),
+                    failed_only=judge_cfg.get("failed_only", False),
+                )
 
 
 def cmd_judge(args):
     _run_judge(
-        run_dir=Path(args.run_dir),
+        job_dir=Path(args.job_dir),
         model=args.model,
         rubric=args.rubric,
         failed_only=args.failed_only,
@@ -171,42 +106,43 @@ def cmd_judge(args):
 
 
 def _run_judge(
-    run_dir: Path,
+    job_dir: Path,
     model: str = "claude-opus-4.6",
     rubric: str = "default",
     failed_only: bool = False,
     task_ids: list[str] | None = None,
 ):
-    tb_results = tb.load_tb_run(run_dir)
+    results = harbor.load_job_results(job_dir)
+    if not results:
+        print(f"No results found in {job_dir}")
+        return
 
     if not task_ids:
-        task_ids = [r["task_id"] for r in tb_results["results"]]
+        task_ids = list(results.keys())
     if failed_only:
-        failed = {r["task_id"] for r in tb_results["results"] if not r["is_resolved"]}
-        task_ids = [t for t in task_ids if t in failed]
+        task_ids = [t for t in task_ids if not results.get(t, {}).get("passed")]
 
     print(f"Judging {len(task_ids)} tasks with {model}")
     print()
 
-    eval_results = RunEvalResult(run_id=run_dir.name, model=model)
+    eval_results = RunEvalResult(run_id=job_dir.name, model=model)
 
     for i, task_id in enumerate(task_ids):
-        trial = tb.load_tb_trial(run_dir, task_id)
+        trial = results.get(task_id)
         if not trial:
             continue
 
-        pytest_result = tb.to_pytest_result(trial)
-        instruction = tb.load_task_instruction(task_id)
-        transcript = tb.load_transcript(run_dir, task_id)
-        test_output = tb.load_test_output(run_dir, task_id)
-        pytest_results = trial.get("parser_results") or {}
+        pytest_result = harbor.to_pytest_result(trial)
+        instruction = harbor.load_instruction(job_dir, task_id)
+        transcript = harbor.load_agent_log(job_dir, task_id)
+        test_output = harbor.load_verifier_log(job_dir, task_id)
 
         print(f"[{i+1}/{len(task_ids)}] {task_id}...", end=" ", flush=True)
 
         rules_result = rules.evaluate_rules(task_id)
         judge_result = judge.judge_task(
             task_id, instruction, transcript, test_output,
-            pytest_results, model=model, rubric_name=rubric,
+            {}, model=model, rubric_name=rubric,
         )
         composite_result = composite.compute_composite(pytest_result, rules_result, judge_result)
 
@@ -222,38 +158,68 @@ def _run_judge(
         print(f"pytest={status}  judge={js}  composite={cs}")
 
     _print_summary(eval_results)
-    out = run_dir / "aae_results.json"
+    out = job_dir / "aae_results.json"
     _save_results(eval_results, out)
     print(f"\nSaved to {out}")
 
 
-def cmd_compare(args):
-    rows = []
-    for run_dir in args.run_dirs:
-        p = Path(run_dir)
-        for name in ("aae_results.json", "results.json"):
-            if (p / name).exists():
-                rows.append((p.name, json.load(open(p / name))))
-                break
-        else:
-            print(f"No results in {run_dir}")
-
-    if not rows:
+def cmd_results(args):
+    job_dir = Path(args.job_dir)
+    results = harbor.load_job_results(job_dir)
+    if not results:
+        print(f"No results in {job_dir}")
         return
 
-    print(f"{'Run':<50s} {'Tasks':>6s} {'Resolved':>10s} {'Composite':>10s}")
-    print("-" * 80)
-    for name, d in rows:
-        if "tasks" in d:
-            n = len(d["tasks"])
-            resolved = sum(1 for t in d["tasks"] if t["pytest"]["is_resolved"])
-            composites = [t["composite"]["score"] for t in d["tasks"] if t.get("composite")]
-            avg = sum(composites) / len(composites) if composites else 0
+    passed = sum(1 for r in results.values() if r.get("passed"))
+    total = len(results)
+    errors = sum(1 for r in results.values() if r.get("error"))
+
+    print(f"Job: {job_dir.name}")
+    print(f"Resolved: {passed}/{total} ({passed*100/total:.1f}%)")
+    if errors:
+        print(f"Errors: {errors}")
+    print()
+
+    if args.verbose:
+        for task_id in sorted(results):
+            r = results[task_id]
+            status = "PASS" if r.get("passed") else "FAIL"
+            err = f" [{r['error_type']}]" if r.get("error_type") else ""
+            print(f"  {task_id:<45} {status}{err}")
+
+
+def cmd_compare(args):
+    rows = []
+    for d in args.job_dirs:
+        p = Path(d)
+        if not p.exists():
+            # Try as task name
+            task_jobs = PROJECT_ROOT / "jobs" / d
+            if task_jobs.exists():
+                p = harbor.find_latest_job(task_jobs) or p
+
+        results = harbor.load_job_results(p)
+        if results:
+            passed = sum(1 for r in results.values() if r.get("passed"))
+            total = len(results)
+            rows.append((p.name, total, passed))
         else:
-            n = d.get("n_resolved", 0) + d.get("n_unresolved", 0)
-            resolved = d.get("n_resolved", 0)
-            avg = d.get("accuracy", 0)
-        print(f"{name:<50s} {n:>6d} {resolved:>10d} {avg:>10.3f}")
+            # Try aae_results.json
+            aae_f = p / "aae_results.json"
+            if aae_f.exists():
+                d = json.load(open(aae_f))
+                n = len(d.get("tasks", []))
+                resolved = sum(1 for t in d["tasks"] if t["pytest"]["is_resolved"])
+                rows.append((p.name, n, resolved))
+
+    if not rows:
+        print("No results found")
+        return
+
+    print(f"{'Run':<55} {'Tasks':>6} {'Resolved':>10} {'Rate':>8}")
+    print("-" * 82)
+    for name, total, passed in rows:
+        print(f"{name:<55} {total:>6} {passed:>10} {passed*100/total:>7.1f}%")
 
 
 def cmd_list(args):
@@ -261,11 +227,10 @@ def cmd_list(args):
     for f in sorted(tasks_dir.glob("*.yaml")):
         cfg = yaml.safe_load(f.read_text())
         agent_cfg = cfg.get("agent", {})
-        name = agent_cfg.get("name", "?")
+        dataset = cfg.get("dataset", "?")
+        task_list = cfg.get("task_list", "all")
         model = agent_cfg.get("model", "auto")
-        kwargs = agent_cfg.get("kwargs", {})
-        extra = f"  kwargs={kwargs}" if kwargs else ""
-        print(f"  {f.stem:<35s} {name}/{model}  dataset={cfg.get('dataset','?')}{extra}")
+        print(f"  {f.stem:<30} {agent_cfg.get('name','?')}/{model}  {dataset}  [{task_list}]")
 
 
 def _print_summary(results: RunEvalResult):
@@ -309,25 +274,29 @@ def _save_results(results: RunEvalResult, path: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="aae", description="Auto Agent Eval")
+    parser = argparse.ArgumentParser(prog="aae", description="Agent Eval (Harbor)")
     sub = parser.add_subparsers(dest="command")
 
-    p_run = sub.add_parser("run", help="Run a task (tb run + judge)")
+    p_run = sub.add_parser("run", help="Run a task (harbor run + optional judge)")
     p_run.add_argument("task", help="Task name (filename in tasks/ without .yaml)")
     p_run.add_argument("--no-judge", action="store_true")
-    p_run.add_argument("--resume", action="store_true", help="Resume from last run, skip completed tasks")
     p_run.set_defaults(func=cmd_run)
 
-    p_judge = sub.add_parser("judge", help="Run judge on existing TB results")
-    p_judge.add_argument("run_dir")
+    p_judge = sub.add_parser("judge", help="Run judge on existing Harbor results")
+    p_judge.add_argument("job_dir")
     p_judge.add_argument("--tasks", nargs="*")
-    p_judge.add_argument("--failed-only", action="store_true", help="Only judge failed tasks")
+    p_judge.add_argument("--failed-only", action="store_true")
     p_judge.add_argument("--model", default="claude-opus-4.6")
     p_judge.add_argument("--rubric", default="default")
     p_judge.set_defaults(func=cmd_judge)
 
+    p_results = sub.add_parser("results", help="Show results from a Harbor job")
+    p_results.add_argument("job_dir")
+    p_results.add_argument("-v", "--verbose", action="store_true")
+    p_results.set_defaults(func=cmd_results)
+
     p_compare = sub.add_parser("compare", help="Compare runs")
-    p_compare.add_argument("run_dirs", nargs="+")
+    p_compare.add_argument("job_dirs", nargs="+")
     p_compare.set_defaults(func=cmd_compare)
 
     p_list = sub.add_parser("list", help="List available tasks")

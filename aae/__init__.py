@@ -1,1 +1,1 @@
-"""AAE — Auto Agent Eval. Terminal-Bench evaluation extension."""
+"""AAE — Agent evaluation framework on Harbor/Terminal-Bench."""

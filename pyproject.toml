@@ -1,12 +1,12 @@
 [project]
 name = "aae"
-version = "0.2.0"
-description = "Terminal-Bench evaluation extension with Agent-as-Judge"
+version = "0.3.0"
+description = "Agent evaluation framework on Harbor/Terminal-Bench"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pyyaml>=6.0.3",
-    "terminal-bench>=0.2.18",
+    "harbor",
 ]
 
 [project.scripts]

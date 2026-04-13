@@ -1,0 +1,20 @@
+# CC + Sonnet 4.6 via Bedrock, TB2 lite (51 tasks)
+
+dataset: terminal-bench/terminal-bench-2
+task_list: tb2-lite.txt
+
+agent:
+  name: claude_code
+  import_path: agents.claude_code.harbor_agent:ClaudeCodeAgent
+  model: global.anthropic.claude-sonnet-4-6
+  env:
+    CLAUDE_CODE_USE_BEDROCK: "1"
+    AWS_REGION: us-east-1
+
+run:
+  concurrent: 4
+
+judge:
+  model: claude-opus-4.6
+  rubric: default
+  failed_only: false
