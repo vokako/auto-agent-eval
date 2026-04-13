@@ -24,7 +24,7 @@ export default function JobPage() {
 
   const tasks = job.tasks;
   const pass = tasks.filter(t => t.passed).length;
-  const fail = tasks.filter(t => !t.passed && !t.error_type).length;
+  const fail = tasks.filter(t => !t.passed).length;
   const err = tasks.filter(t => !!t.error_type).length;
   const rate = tasks.length ? pass / tasks.length * 100 : 0;
 
@@ -37,7 +37,7 @@ export default function JobPage() {
   const filtered = tasks
     .filter(t => {
       if (filter === "pass") return t.passed;
-      if (filter === "fail") return !t.passed && !t.error_type;
+      if (filter === "fail") return !t.passed;
       if (filter === "error") return !!t.error_type;
       return true;
     })

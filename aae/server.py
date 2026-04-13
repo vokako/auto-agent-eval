@@ -153,6 +153,7 @@ def list_jobs():
                 passed = sum(1 for t in tasks.values() if t["passed"])
                 total = len(tasks)
                 errors = sum(1 for t in tasks.values() if t.get("error_type"))
+                verified = total - sum(1 for t in tasks.values() if t.get("error_type") and not t["passed"] and t["reward"] == 0.0 and "reward" not in t.get("error_type", "").lower())
                 agent_name, model_name = _read_agent_info(job_dir)
                 extra = _agent_extra(job_dir)
                 started = parsed.get("started_at")
