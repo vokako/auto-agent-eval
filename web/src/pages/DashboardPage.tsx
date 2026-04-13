@@ -13,10 +13,22 @@ export default function DashboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>("started_at");
   const [sortAsc, setSortAsc] = useState(false);
   const [search, setSearch] = useState("");
-  const [minTasks, setMinTasks] = useState(2);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
+  // Column filters
+  const [fConfig, setFConfig] = useState<Set<string>>(new Set());
+  const [fAgent, setFAgent] = useState<Set<string>>(new Set());
+  const [fAdapter, setFAdapter] = useState<Set<string>>(new Set());
+  const [fMinTasks, setFMinTasks] = useState(0);
+  const [fMinRate, setFMinRate] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
+
   if (loading || !jobs) return <div className="loading">Loading…</div>;
+
+  // Unique values for chip filters
+  const configs = [...new Set(jobs.map(j => j.config))].sort();
+  const agents = [...new Set(jobs.map(j => j.agent || "—"))].sort();
+  const adapters = [...new Set(jobs.map(j => j.adapter))].sort();
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);
@@ -24,13 +36,30 @@ export default function DashboardPage() {
   };
   const arrow = (key: SortKey) => sortKey === key ? (sortAsc ? " ↑" : " ↓") : "";
 
+  const toggleChip = (set: Set<string>, setFn: (s: Set<string>) => void, val: string) => {
+    const next = new Set(set);
+    next.has(val) ? next.delete(val) : next.add(val);
+    setFn(next);
+  };
+
   const sorted = [...jobs]
-    .filter(j => j.total >= minTasks)
     .filter(j => !search || j.config.includes(search) || j.agent.toLowerCase().includes(search.toLowerCase()))
+    .filter(j => fConfig.size === 0 || fConfig.has(j.config))
+    .filter(j => fAgent.size === 0 || fAgent.has(j.agent || "—"))
+    .filter(j => fAdapter.size === 0 || fAdapter.has(j.adapter))
+    .filter(j => j.total >= fMinTasks)
+    .filter(j => j.rate >= fMinRate)
     .sort((a, b) => {
       const va = (a as any)[sortKey], vb = (b as any)[sortKey];
       return (sortAsc ? 1 : -1) * (va < vb ? -1 : va > vb ? 1 : 0);
     });
+
+  const hasFilters = fConfig.size > 0 || fAgent.size > 0 || fAdapter.size > 0 || fMinTasks > 0 || fMinRate > 0;
+
+  const clearFilters = () => {
+    setFConfig(new Set()); setFAgent(new Set()); setFAdapter(new Set());
+    setFMinTasks(0); setFMinRate(0);
+  };
 
   const toggle = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -39,26 +68,60 @@ export default function DashboardPage() {
     setSelected(next);
   };
 
-  const compare = () => {
-    navigate(`/compare?ids=${[...selected].join(",")}`);
-  };
-
   return (
     <>
       <header>
         <h1 onClick={() => navigate("/")}>🧪 Agent Eval</h1>
         <div className="header-actions">
-          <input className="search" placeholder="Search jobs…" value={search} onChange={e => setSearch(e.target.value)} />
-          <select className="filter-select" value={minTasks} onChange={e => setMinTasks(Number(e.target.value))}>
-            <option value={0}>All jobs</option>
-            <option value={2}>≥ 2 tasks</option>
-            <option value={10}>≥ 10 tasks</option>
-            <option value={50}>≥ 50 tasks</option>
-          </select>
-          {selected.size >= 2 && <button className="btn-primary" onClick={compare}>Compare {selected.size} jobs</button>}
-          {selected.size > 0 && <button className="btn-ghost" onClick={() => setSelected(new Set())}>Clear</button>}
+          <input className="search" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+          <button className={`btn-ghost ${showFilters ? "active" : ""}`} onClick={() => setShowFilters(!showFilters)}>
+            ⚙ Filters{hasFilters ? ` (${sorted.length}/${jobs.length})` : ""}
+          </button>
+          {hasFilters && <button className="btn-ghost" onClick={clearFilters}>Clear</button>}
+          {selected.size >= 2 && <button className="btn-primary" onClick={() => navigate(`/compare?ids=${[...selected].join(",")}`)}>Compare {selected.size}</button>}
+          {selected.size > 0 && <button className="btn-ghost" onClick={() => setSelected(new Set())}>Deselect</button>}
         </div>
       </header>
+
+      {showFilters && (
+        <div className="filter-panel">
+          <div className="filter-row">
+            <label>Config</label>
+            <div className="chips">
+              {configs.map(c => (
+                <button key={c} className={`chip ${fConfig.has(c) ? "active" : ""}`} onClick={() => toggleChip(fConfig, setFConfig, c)}>{c}</button>
+              ))}
+            </div>
+          </div>
+          <div className="filter-row">
+            <label>Agent</label>
+            <div className="chips">
+              {agents.map(a => (
+                <button key={a} className={`chip ${fAgent.has(a) ? "active" : ""}`} onClick={() => toggleChip(fAgent, setFAgent, a)}>{a}</button>
+              ))}
+            </div>
+          </div>
+          <div className="filter-row">
+            <label>Adapter</label>
+            <div className="chips">
+              {adapters.map(a => (
+                <button key={a} className={`chip ${fAdapter.has(a) ? "active" : ""}`} onClick={() => toggleChip(fAdapter, setFAdapter, a)}>{a}</button>
+              ))}
+            </div>
+          </div>
+          <div className="filter-row">
+            <label>Min tasks</label>
+            <input type="range" min={0} max={100} value={fMinTasks} onChange={e => setFMinTasks(Number(e.target.value))} />
+            <span className="range-val">{fMinTasks}</span>
+          </div>
+          <div className="filter-row">
+            <label>Min rate %</label>
+            <input type="range" min={0} max={100} value={fMinRate} onChange={e => setFMinRate(Number(e.target.value))} />
+            <span className="range-val">{fMinRate}%</span>
+          </div>
+        </div>
+      )}
+
       <div className="stats-bar">
         <span>{sorted.length} jobs</span>
         <span>·</span>

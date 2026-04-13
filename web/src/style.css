@@ -29,8 +29,19 @@ h1:hover { color: var(--blue); }
 .search.small { width: 160px; }
 .search::placeholder { color: var(--muted); }
 .search:focus { outline: none; border-color: var(--blue); }
-.filter-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; }
-.filter-select:focus { outline: none; border-color: var(--blue); }
+
+/* Filter panel */
+.filter-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; }
+.filter-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.filter-row:last-child { margin-bottom: 0; }
+.filter-row label { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; min-width: 70px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { background: var(--surface2); border: 1px solid var(--border); color: var(--dim); padding: 3px 10px; border-radius: 14px; cursor: pointer; font-size: 12px; transition: all 0.1s; }
+.chip:hover { border-color: var(--blue); color: var(--text); }
+.chip.active { background: rgba(88,166,255,0.15); border-color: var(--blue); color: var(--blue); }
+.filter-row input[type="range"] { flex: 1; max-width: 200px; accent-color: var(--blue); }
+.range-val { font-size: 12px; color: var(--dim); min-width: 36px; font-variant-numeric: tabular-nums; }
+.btn-ghost.active { border-color: var(--blue); color: var(--blue); }
 
 /* Stats bar */
 .stats-bar { display: flex; gap: 8px; color: var(--dim); font-size: 13px; margin-bottom: 12px; }
