@@ -24,7 +24,8 @@ def _parse_result(result_file: Path) -> dict:
     data = json.load(open(result_file))
     evals = data.get("stats", {}).get("evals", {})
     if not evals:
-        return {"tasks": {}, "started_at": data.get("started_at"), "finished_at": data.get("finished_at")}
+        return {"tasks": {}, "started_at": data.get("started_at"), "finished_at": data.get("finished_at"),
+                "n_total": data.get("n_total_trials", 0)}
 
     ev = next(iter(evals.values()))
     rs = ev.get("reward_stats", {}).get("reward", {})
@@ -47,6 +48,7 @@ def _parse_result(result_file: Path) -> dict:
         "tasks": tasks,
         "n_trials": ev.get("n_trials", 0),
         "n_errors": ev.get("n_errors", 0),
+        "n_total": data.get("n_total_trials", 0),
         "started_at": data.get("started_at"),
         "finished_at": data.get("finished_at"),
     }
@@ -179,6 +181,9 @@ def list_jobs():
                     "rate": round(passed / total * 100, 1) if total else 0,
                     "duration": _duration_str(started, finished),
                     "finished": finished is not None,
+                    "status": "done" if finished else "running",
+                    "n_total": parsed.get("n_total", 0),
+                    "progress": total,
                 })
             except Exception:
                 continue

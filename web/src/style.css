@@ -70,6 +70,9 @@ h1:hover { color: var(--blue); }
 .adapter-tag.built-in { background: var(--blue-bg); color: var(--blue); }
 .adapter-tag.custom { background: rgba(167,139,250,0.1); color: var(--purple); }
 .ver-tag { font-size: 11px; color: var(--muted); margin-left: 6px; }
+.status-running { color: var(--yellow); font-size: 12px; font-weight: 500; animation: pulse 2s infinite; }
+.status-done { color: var(--green); font-size: 12px; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 /* Tables */
 table { width: 100%; border-collapse: separate; border-spacing: 0; }

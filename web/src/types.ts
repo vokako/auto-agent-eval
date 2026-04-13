@@ -14,6 +14,9 @@ export interface JobSummary {
   rate: number;
   duration: string;
   finished: boolean;
+  status: string;
+  n_total: number;
+  progress: number;
 }
 
 export interface TaskResult {

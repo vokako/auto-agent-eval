@@ -105,6 +105,7 @@ export default function DashboardPage() {
           </th>
           <th className="sort r" onClick={() => toggleSort("errors")}>Err{arrow("errors")}</th>
           <th className="r">Time</th>
+          <th>Status</th>
           <th className="sort" onClick={() => toggleSort("started_at")}>Date{arrow("started_at")}</th>
         </tr></thead>
         <tbody>{sorted.map(j => (
@@ -119,6 +120,13 @@ export default function DashboardPage() {
             <td className="r"><span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span></td>
             <td className="r mono">{j.errors || "—"}</td>
             <td className="r dim">{j.duration || "—"}</td>
+            <td>
+              {j.status === "running" ? (
+                <span className="status-running">● {j.progress}/{j.n_total}</span>
+              ) : (
+                <span className="status-done">✓</span>
+              )}
+            </td>
             <td className="dim">{fmtTime(j.started_at)}</td>
           </tr>
         ))}</tbody>
