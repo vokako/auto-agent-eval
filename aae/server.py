@@ -135,7 +135,7 @@ def _duration_str(started: str | None, finished: str | None) -> str:
 
 
 @app.get("/api/jobs")
-def list_jobs(min_tasks: int = 2):
+def list_jobs():
     if not JOBS_DIR.exists():
         return []
 
@@ -157,9 +157,6 @@ def list_jobs(min_tasks: int = 2):
                 extra = _agent_extra(job_dir)
                 started = parsed.get("started_at")
                 finished = parsed.get("finished_at")
-
-                if total < min_tasks:
-                    continue
 
                 jobs.append({
                     "id": f"{config_dir.name}/{job_dir.name}",

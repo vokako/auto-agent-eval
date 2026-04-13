@@ -13,6 +13,7 @@ export default function DashboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>("started_at");
   const [sortAsc, setSortAsc] = useState(false);
   const [search, setSearch] = useState("");
+  const [minTasks, setMinTasks] = useState(2);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   if (loading || !jobs) return <div className="loading">Loading…</div>;
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   const arrow = (key: SortKey) => sortKey === key ? (sortAsc ? " ↑" : " ↓") : "";
 
   const sorted = [...jobs]
+    .filter(j => j.total >= minTasks)
     .filter(j => !search || j.config.includes(search) || j.agent.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       const va = (a as any)[sortKey], vb = (b as any)[sortKey];
@@ -47,6 +49,12 @@ export default function DashboardPage() {
         <h1 onClick={() => navigate("/")}>🧪 Agent Eval</h1>
         <div className="header-actions">
           <input className="search" placeholder="Search jobs…" value={search} onChange={e => setSearch(e.target.value)} />
+          <select className="filter-select" value={minTasks} onChange={e => setMinTasks(Number(e.target.value))}>
+            <option value={0}>All jobs</option>
+            <option value={2}>≥ 2 tasks</option>
+            <option value={10}>≥ 10 tasks</option>
+            <option value={50}>≥ 50 tasks</option>
+          </select>
           {selected.size >= 2 && <button className="btn-primary" onClick={compare}>Compare {selected.size} jobs</button>}
           {selected.size > 0 && <button className="btn-ghost" onClick={() => setSelected(new Set())}>Clear</button>}
         </div>
