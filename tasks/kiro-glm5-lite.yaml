@@ -1,0 +1,12 @@
+# Kiro CLI + GLM-5, TB2 lite (51 tasks)
+
+dataset: terminal-bench/terminal-bench-2
+task_list: tb2-lite.txt
+
+agent:
+  name: kiro_cli
+  import_path: agents.kiro_cli.harbor_agent:KiroCliAgent
+  model: glm-5
+
+run:
+  concurrent: 8
