@@ -123,7 +123,7 @@ export default function JobPage() {
               <div className="detail-tabs">
                 {task.test_cases.length > 0 && (
                   <details open>
-                    <summary>🧪 Tests ({task.test_cases.filter(t => t.status === "passed").length}/{task.test_cases.length} passed)</summary>
+                    <summary>Tests ({task.test_cases.filter(t => t.status === "passed").length}/{task.test_cases.length} passed)</summary>
                     <div className="test-cases">
                       {task.test_cases.map((tc, i) => (
                         <div key={i} className={`test-case ${tc.status}`}>
@@ -135,10 +135,10 @@ export default function JobPage() {
                     </div>
                   </details>
                 )}
-                <TabSection title="📋 Instruction" content={task.instruction} defaultOpen={task.test_cases.length === 0} />
-                <TabSection title={`🤖 Agent Log (${fmtSize(task.agent_log.length)})`} content={task.agent_log} />
-                <TabSection title="🧪 Verifier Log" content={task.verifier_log} />
-                <TabSection title="📝 Trial Log" content={task.trial_log} />
+                <TabSection title="Instruction" content={task.instruction} defaultOpen={task.test_cases.length === 0} />
+                <TabSection title={`Agent Log (${fmtSize(task.agent_log.length)})`} content={task.agent_log} />
+                <TabSection title="Verifier Log" content={task.verifier_log} />
+                <TabSection title="Trial Log" content={task.trial_log} />
               </div>
             )}
           </div>

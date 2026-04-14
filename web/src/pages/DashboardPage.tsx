@@ -103,8 +103,8 @@ export default function DashboardPage() {
           </th>
           <th className="sort r" onClick={() => toggleSort("passed")}>Pass{arrow("passed")}</th>
           <th className="r">Fail</th>
-          <th className="r">⏰</th>
-          <th className="r">💥</th>
+          <th className="r">Timeout</th>
+          <th className="r">Error</th>
           <th className="sort r" onClick={() => toggleSort("rate")}>
             Rate{arrow("rate")}
             <ColumnRangeFilter value={fMinRate} max={100} onChange={setFMinRate} suffix="%" />
