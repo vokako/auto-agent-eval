@@ -1,6 +1,7 @@
 """Kiro CLI agent for Harbor."""
 
 import json
+import os
 import shlex
 import urllib.request
 from pathlib import Path
@@ -92,15 +93,24 @@ class KiroCliAgent(BaseInstalledAgent):
         await environment.upload_file(str(bin_path), "/installed-agent/bin/kiro-cli-chat")
         await self.exec_as_root(environment, "chmod +x /installed-agent/bin/kiro-cli-chat")
 
-        # Copy auth DB
-        auth_db = _find_auth_db()
-        if auth_db:
-            await self.exec_as_agent(environment, "mkdir -p $HOME/.local/share/kiro-cli")
-            await environment.upload_file(str(auth_db), "/tmp/kiro-auth.sqlite3")
-            await self.exec_as_agent(
-                environment,
-                "mv /tmp/kiro-auth.sqlite3 $HOME/.local/share/kiro-cli/data.sqlite3",
-            )
+        # Auth: prefer KIRO_API_KEY env var, fall back to sqlite DB copy
+        api_key = os.environ.get("KIRO_API_KEY", "")
+        if not api_key:
+            auth_db = _find_auth_db()
+            if auth_db:
+                await self.exec_as_agent(environment, "mkdir -p $HOME/.local/share/kiro-cli")
+                await environment.upload_file(str(auth_db), "/tmp/kiro-auth.sqlite3")
+                await self.exec_as_agent(
+                    environment,
+                    "mv /tmp/kiro-auth.sqlite3 $HOME/.local/share/kiro-cli/data.sqlite3",
+                )
+
+        # Copy agent config for --agent benchmark (allows tools in non-interactive)
+        agent_config = AGENT_DIR / "config" / "benchmark.json"
+        if agent_config.exists():
+            await self.exec_as_agent(environment, "mkdir -p $HOME/.kiro/agents")
+            await environment.upload_file(str(agent_config), "/tmp/benchmark.json")
+            await self.exec_as_agent(environment, "mv /tmp/benchmark.json $HOME/.kiro/agents/benchmark.json")
 
     def populate_context_post_run(self, context: AgentContext) -> None:
         # Parse credits from agent output if available
@@ -124,12 +134,24 @@ class KiroCliAgent(BaseInstalledAgent):
         if self.model_name:
             model_flag = f" --model {shlex.quote(self.model_name)}"
 
+        # Use --agent benchmark for 2.0+ (allows tools in non-interactive mode)
+        agent_flag = ""
+        agent_config = AGENT_DIR / "config" / "benchmark.json"
+        if agent_config.exists():
+            agent_flag = " --agent benchmark"
+
+        env = {}
+        api_key = os.environ.get("KIRO_API_KEY", "")
+        if api_key:
+            env["KIRO_API_KEY"] = api_key
+
         await self.exec_as_agent(
             environment,
             command=(
                 'export PATH="/installed-agent/bin:$PATH"; '
                 f"kiro-cli-chat chat --no-interactive --trust-all-tools"
-                f" --wrap never{model_flag} {escaped}"
+                f" --wrap never{agent_flag}{model_flag} {escaped}"
                 f" 2>&1 | tee /logs/agent/kiro-cli.txt"
             ),
+            env=env,
         )
