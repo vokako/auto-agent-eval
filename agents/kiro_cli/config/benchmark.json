@@ -1,7 +1,6 @@
 {
   "name": "benchmark",
   "description": "Benchmark agent with all tools allowed",
-  "tools": ["read", "write", "shell", "aws", "grep", "glob", "thinking", "todo", "delegate"],
-  "allowedTools": ["read", "write", "shell", "aws", "grep", "glob", "thinking", "todo", "delegate"],
-  "toolsSettings": {}
+  "tools": ["*"],
+  "allowedTools": ["*"]
 }
