@@ -7,6 +7,7 @@ import "prismjs/components/prism-yaml";
 import "prismjs/components/prism-toml";
 import "prismjs/components/prism-markdown";
 import { fmtSize } from "../lib/format";
+import { JsonView } from "./JsonView";
 
 interface FileEntry { path: string; size: number; }
 
@@ -19,6 +20,15 @@ const EXT_LANG: Record<string, string> = {
 function getLang(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase() || "";
   return EXT_LANG[ext] || "";
+}
+
+function isJson(path: string): boolean {
+  const ext = path.split(".").pop()?.toLowerCase() || "";
+  return ext === "json";
+}
+
+function tryParseJson(text: string): unknown {
+  try { return JSON.parse(text); } catch { return text; }
 }
 
 export function FileBrowser({ jobId, taskName }: { jobId: string; taskName: string }) {
@@ -97,6 +107,10 @@ export function FileBrowser({ jobId, taskName }: { jobId: string; taskName: stri
           </div>
           {loading ? (
             <div className="loading">Loading…</div>
+          ) : isJson(selected) ? (
+            <div className="file-json-wrap">
+              <JsonView data={tryParseJson(content || "")} />
+            </div>
           ) : (
             <pre className="code-block">
               <code ref={codeRef} className={getLang(selected) ? `language-${getLang(selected)}` : ""}>

@@ -174,6 +174,7 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-size { color: var(--muted); font-size: 10px; margin-left: 8px; flex-shrink: 0; }
 .file-content { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.file-json-wrap { flex: 1; overflow: auto; }
 .file-content-header { padding: 6px 14px; font-size: 12px; color: var(--dim); border-bottom: 1px solid var(--border); background: var(--surface2); }
 .code-block { flex: 1; overflow: auto; margin: 0; padding: 14px; font-size: 12px; font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; line-height: 1.6; background: var(--bg) !important; color: var(--dim); white-space: pre-wrap; word-break: break-all; }
 .code-block code { background: none !important; }
@@ -195,6 +196,23 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 .detail-tab:hover { color: var(--text); }
 .detail-tab.active { background: var(--blue); color: #0a0e14; }
 .detail-tab-content { flex: 1; overflow-y: auto; }
+
+/* JSON tree view */
+.json-view { padding: 14px; font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; font-size: 12px; line-height: 1.7; overflow: auto; background: var(--bg); }
+.jv-node { }
+.jv-toggle { cursor: pointer; display: flex; align-items: baseline; gap: 4px; }
+.jv-toggle:hover { background: var(--surface2); border-radius: 3px; }
+.jv-arrow { font-size: 8px; color: var(--muted); transition: transform 0.15s; display: inline-block; width: 12px; }
+.jv-arrow.open { transform: rotate(90deg); }
+.jv-children { padding-left: 18px; border-left: 1px solid var(--border); margin-left: 5px; }
+.jv-line { padding-left: 16px; }
+.jv-key { color: var(--purple); }
+.jv-str { color: #a5d6ff; }
+.jv-num { color: #79c0ff; }
+.jv-bool { color: #ff7b72; }
+.jv-null { color: #8b949e; font-style: italic; }
+.jv-bracket { color: #8b949e; }
+.jv-preview { color: var(--muted); font-size: 11px; }
 
 /* Compare */
 .cmp-cards { display: flex; gap: 14px; margin-bottom: 20px; }
