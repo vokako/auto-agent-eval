@@ -10,51 +10,68 @@ Single-page dashboard to browse Harbor benchmark results. Python backend (FastAP
 
 Overview of all benchmark runs.
 
-- Table of jobs grouped by task config name (e.g. `kiro-sonnet-lite`, `cc-sonnet-v2`)
-- Each row: task config, timestamp, agent, model, pass/total, pass rate %, duration
-- Click row → Job Detail page
-- Sort by date (newest first)
+- Table with sortable columns: Config, Agent, Adapter, Dataset, Tasks, Pass, Fail, Timeout, Error, Rate, Σ Task time, Status, Date
+- Excel-style column filters (dropdown per column header) for Config, Agent, Adapter
+- Range filters for Tasks count and Rate %
+- Active filter tags shown above table, removable individually
+- Checkbox selection for multi-job compare
+- Search box for quick filtering
+- Running jobs show animated progress indicator (● 46/51)
 
-### 2. Job Detail (/jobs/:jobId)
+### 2. Job Detail (/jobs/:config/:timestamp)
 
 Single benchmark run results.
 
-- Header: agent, model, dataset, pass rate, total tasks, duration, error count
-- Bar chart: pass vs fail vs error
-- Task table: task name, reward (pass/fail), error type, agent log size
-- Filter: all / pass / fail / error
-- Click task → Task Detail panel
+- Header: Agent, Model, Adapter + version, Dataset, Date, Task Pass rate, Test Pass rate
+- Progress bar: pass (green) / fail (red) / error (yellow)
+- Filter tabs: all / pass / fail / timeout / error
+- Task table: status icon, task name, duration, test pass count, cost, error tag
+- Click task → detail panel slides in from right
 
-### 3. Task Detail (slide-over panel from Job Detail)
+### 3. Task Detail (slide-over panel)
 
-Single task trial details.
+Two tabs: Info and Files.
 
-- Task name, reward, error type if any
-- Instruction text (from Harbor cache)
-- Agent log viewer (scrollable, syntax highlighted for JSON lines)
-- Verifier log viewer
+**Info tab:**
+- Test cases: expandable list with pass/fail per pytest test case
+- Instruction: task description from Harbor cache
+- Agent Log / Verifier Log / Trial Log: lazy-loaded on expand (not fetched until clicked)
 
-### 4. Compare (/compare)
+**Files tab:**
+- File tree: all files in trial directory, grouped by folder
+- Click file → preview with syntax highlighting (Prism.js)
+- JSON files: interactive tree view with collapsible nodes, color-coded values
+
+### 4. Compare (/compare?ids=a,b,c)
 
 Side-by-side comparison of multiple jobs.
 
-- Select 2-3 jobs to compare
-- Table: task name, result per job (pass/fail/error)
-- Summary row: total pass, rate
-- Highlight differences (task passed in one but failed in another)
+- Summary cards: pass/total and rate per job
+- Filter: All tasks / Differences only
+- Table: task name + result per job, diff rows highlighted
 
 ## API Endpoints
 
 ```
-GET /api/jobs                    → list of job summaries
-GET /api/jobs/:id                → job detail with all task results
-GET /api/jobs/:id/tasks/:task    → task detail (instruction, logs)
-GET /api/compare?ids=a,b,c       → comparison data
+GET /api/jobs                                    → list of job summaries (cached)
+GET /api/jobs/:config/:timestamp                 → job detail with task list (cached for finished jobs)
+GET /api/jobs/:config/:timestamp/tasks/:task     → task info (instruction + test cases)
+GET /api/jobs/:config/:timestamp/tasks/:task/logs/:type → lazy-load log content (agent/verifier/trial)
+GET /api/jobs/:config/:timestamp/tasks/:task/files      → file tree listing
+GET /api/jobs/:config/:timestamp/tasks/:task/files/:path → file content
+GET /api/compare?ids=a,b,c                       → comparison data
 ```
+
+## Caching
+
+- Job detail: file cache in `jobs/.cache/`, keyed by config+timestamp, invalidated by `result.json` mtime
+- Jobs list: in-memory cache, invalidated by latest `result.json` mtime across all jobs
+- Running jobs are never cached (always fresh)
 
 ## Tech Stack
 
-- Backend: FastAPI + uvicorn, reads `jobs/` directory
-- Frontend: React + Vite + TypeScript
-- Styling: plain CSS (no framework)
-- Deployment: `aae serve` command, port 8080
+- Backend: FastAPI + uvicorn
+- Frontend: React 19 + Vite 8 + TypeScript + React Router
+- Syntax highlighting: Prism.js
+- Styling: plain CSS (dark theme)
+- Deployment: `aae serve -p 8080`, screen session on EC2

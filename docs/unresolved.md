@@ -1,18 +1,14 @@
 # Unresolved Issues
 
-## High Priority
-
-- **AAE CLI Harbor migration**: `aae/cli.py` still uses `tb run`. Need to update to `harbor run` and read Harbor result format (`jobs/` dir, `reward.txt`). Branch: `harbor-migration`.
-- **Credit/token tracking**: Kiro credits parsed from terminal text (fragile). Qoder has no usage stats. Need structured output or API-level tracking.
-
 ## Medium Priority
 
-- **Incremental testing (`--resume`)**: Implemented for TB but not tested with Harbor. Harbor may handle resume differently.
-- **Prebuild Docker images**: Script exists (`prebuild.sh`) but not integrated into `aae run`. Would eliminate concurrent build failures.
-- **Agent judge on Harbor results**: `aae/tb.py` reads TB output format. Need `aae/harbor.py` to read Harbor's `jobs/` format.
+- **Credit/token tracking**: Kiro credits parsed from terminal text (fragile). Qoder has no usage stats. Need structured output or API-level tracking.
+- **Kiro 1.29.8 compatibility**: `execute_bash` rejected in `--no-interactive` mode. Pinned to 1.29.6. Monitor future releases.
+- **CC adapter performance**: 14/51 timeouts on lite set vs Kiro's 7. CC is slower per turn due to Bedrock latency + more turns. Not an adapter bug.
+- **Docker Hub rate limit**: Pre-pull images after login. Don't run `docker system prune`. Consider mirroring images to ECR.
 
 ## Low Priority
 
-- **Web dashboard**: `web/` directory has React skeleton but not connected to current data.
-- **Multiple rubrics**: Only `default.yaml` exists. `coding.yaml` and `analysis.yaml` were created then removed. Add back when needed.
+- **Agent judge on Harbor results**: `aae judge` command works but not integrated with web dashboard yet.
 - **pass@k support**: Harbor supports `-k 5` for multiple attempts. AAE doesn't aggregate multi-attempt results yet.
+- **Legacy cleanup**: `runs/` directory (TB format), `aae/tb.py`, old task configs (`*-tb-core.yaml`) can be removed.
