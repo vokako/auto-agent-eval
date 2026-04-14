@@ -167,14 +167,17 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 
 /* File browser */
 .file-browser { display: flex; gap: 0; height: 100%; min-height: 300px; }
-.file-tree { width: 220px; min-width: 220px; overflow-y: auto; border-right: 1px solid var(--border); padding: 8px 0; }
-.file-dir { margin-bottom: 4px; }
-.dir-name { padding: 4px 12px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
-.file-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px 4px 20px; cursor: pointer; font-size: 12px; transition: background 0.1s; }
-.file-item:hover { background: var(--surface2); }
-.file-item.active { background: var(--surface3); color: var(--blue); }
-.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-size { color: var(--muted); font-size: 10px; margin-left: 8px; flex-shrink: 0; }
+.file-tree { width: 240px; min-width: 240px; overflow-y: auto; border-right: 1px solid var(--border); padding: 6px 0; }
+.ft-dir { display: flex; align-items: center; gap: 4px; padding: 3px 8px; cursor: pointer; font-size: 13px; border-radius: 4px; margin: 0 4px; }
+.ft-dir:hover { background: var(--surface2); }
+.ft-arrow { font-size: 8px; color: var(--muted); transition: transform 0.15s; display: inline-block; width: 12px; }
+.ft-arrow.open { transform: rotate(90deg); }
+.ft-file { display: flex; align-items: center; gap: 4px; padding: 3px 8px; cursor: pointer; font-size: 13px; border-radius: 4px; margin: 0 4px; }
+.ft-file:hover { background: var(--surface2); }
+.ft-file.active { background: var(--surface3); color: var(--blue); }
+.ft-icon { font-size: 14px; flex-shrink: 0; }
+.ft-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ft-size { color: var(--muted); font-size: 10px; flex-shrink: 0; }
 .file-content { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .file-json-wrap { flex: 1; overflow: auto; }
 .file-content-header { padding: 6px 14px; font-size: 12px; color: var(--dim); border-bottom: 1px solid var(--border); background: var(--surface2); }

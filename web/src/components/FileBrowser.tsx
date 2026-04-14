@@ -11,24 +11,79 @@ import { JsonView } from "./JsonView";
 
 interface FileEntry { path: string; size: number; }
 
+interface TreeNode {
+  name: string;
+  path: string;
+  size: number;
+  children: Record<string, TreeNode>;
+  isFile: boolean;
+}
+
 const EXT_LANG: Record<string, string> = {
   json: "json", jsonl: "json", py: "python", sh: "bash", bash: "bash",
   yaml: "yaml", yml: "yaml", toml: "toml", md: "markdown",
-  ts: "javascript", tsx: "javascript", js: "javascript", jsx: "javascript",
+  ts: "javascript", tsx: "javascript", js: "javascript",
 };
 
-function getLang(path: string): string {
-  const ext = path.split(".").pop()?.toLowerCase() || "";
-  return EXT_LANG[ext] || "";
+function buildTree(files: FileEntry[]): TreeNode {
+  const root: TreeNode = { name: "", path: "", size: 0, children: {}, isFile: false };
+  for (const f of files) {
+    const parts = f.path.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (!node.children[part]) {
+        node.children[part] = {
+          name: part,
+          path: parts.slice(0, i + 1).join("/"),
+          size: 0,
+          children: {},
+          isFile: i === parts.length - 1,
+        };
+      }
+      node = node.children[part];
+    }
+    node.size = f.size;
+    node.isFile = true;
+  }
+  return root;
 }
 
-function isJson(path: string): boolean {
-  const ext = path.split(".").pop()?.toLowerCase() || "";
-  return ext === "json";
-}
+function TreeItem({ node, depth, selected, onSelect }: {
+  node: TreeNode; depth: number; selected: string | null; onSelect: (path: string) => void;
+}) {
+  const [open, setOpen] = useState(depth < 2);
+  const entries = Object.values(node.children).sort((a, b) => {
+    if (a.isFile !== b.isFile) return a.isFile ? 1 : -1;
+    return a.name.localeCompare(b.name);
+  });
 
-function tryParseJson(text: string): unknown {
-  try { return JSON.parse(text); } catch { return text; }
+  if (node.isFile && Object.keys(node.children).length === 0) {
+    return (
+      <div
+        className={`ft-file ${selected === node.path ? "active" : ""}`}
+        style={{ paddingLeft: depth * 16 + 8 }}
+        onClick={() => onSelect(node.path)}
+      >
+        <span className="ft-icon">📄</span>
+        <span className="ft-name">{node.name}</span>
+        <span className="ft-size">{fmtSize(node.size)}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="ft-dir" style={{ paddingLeft: depth * 16 + 8 }} onClick={() => setOpen(!open)}>
+        <span className={`ft-arrow ${open ? "open" : ""}`}>▶</span>
+        <span className="ft-icon">{open ? "📂" : "📁"}</span>
+        <span className="ft-name">{node.name || "/"}</span>
+      </div>
+      {open && entries.map(child => (
+        <TreeItem key={child.path} node={child} depth={depth + 1} selected={selected} onSelect={onSelect} />
+      ))}
+    </div>
+  );
 }
 
 export function FileBrowser({ jobId, taskName }: { jobId: string; taskName: string }) {
@@ -41,85 +96,52 @@ export function FileBrowser({ jobId, taskName }: { jobId: string; taskName: stri
   const BASE = import.meta.env.DEV ? "http://localhost:8080" : "";
 
   useEffect(() => {
-    setFiles(null);
-    setSelected(null);
-    setContent(null);
-    fetch(`${BASE}/api/jobs/${jobId}/tasks/${taskName}/files`)
-      .then(r => r.json())
-      .then(setFiles);
+    setFiles(null); setSelected(null); setContent(null);
+    fetch(`${BASE}/api/jobs/${jobId}/tasks/${taskName}/files`).then(r => r.json()).then(setFiles);
   }, [jobId, taskName]);
 
   useEffect(() => {
-    if (codeRef.current && content) {
+    if (codeRef.current && content && selected && !isJson(selected)) {
       Prism.highlightElement(codeRef.current);
     }
   }, [content, selected]);
 
   const openFile = async (path: string) => {
-    setSelected(path);
-    setLoading(true);
+    setSelected(path); setLoading(true);
     try {
       const res = await fetch(`${BASE}/api/jobs/${jobId}/tasks/${taskName}/files/${path}`);
-      const data = await res.json();
-      setContent(data.content);
-    } catch {
-      setContent("Failed to load");
-    }
+      setContent((await res.json()).content);
+    } catch { setContent("Failed to load"); }
     setLoading(false);
   };
 
   if (!files) return <div className="loading">Loading files…</div>;
 
-  // Build tree structure
-  const tree: Record<string, FileEntry[]> = {};
-  for (const f of files) {
-    const dir = f.path.includes("/") ? f.path.substring(0, f.path.lastIndexOf("/")) : ".";
-    if (!tree[dir]) tree[dir] = [];
-    tree[dir].push(f);
-  }
+  const tree = buildTree(files);
 
   return (
     <div className="file-browser">
       <div className="file-tree">
-        {Object.entries(tree).sort(([a], [b]) => a.localeCompare(b)).map(([dir, entries]) => (
-          <div key={dir} className="file-dir">
-            <div className="dir-name">{dir}/</div>
-            {entries.map(f => {
-              const name = f.path.split("/").pop()!;
-              return (
-                <div
-                  key={f.path}
-                  className={`file-item ${selected === f.path ? "active" : ""}`}
-                  onClick={() => openFile(f.path)}
-                >
-                  <span className="file-name">{name}</span>
-                  <span className="file-size">{fmtSize(f.size)}</span>
-                </div>
-              );
-            })}
-          </div>
+        {Object.values(tree.children).sort((a, b) => {
+          if (a.isFile !== b.isFile) return a.isFile ? 1 : -1;
+          return a.name.localeCompare(b.name);
+        }).map(node => (
+          <TreeItem key={node.path} node={node} depth={0} selected={selected} onSelect={openFile} />
         ))}
       </div>
       {selected && (
         <div className="file-content">
-          <div className="file-content-header">
-            <span>{selected}</span>
-          </div>
-          {loading ? (
-            <div className="loading">Loading…</div>
-          ) : isJson(selected) ? (
-            <div className="file-json-wrap">
-              <JsonView data={tryParseJson(content || "")} />
-            </div>
-          ) : (
-            <pre className="code-block">
-              <code ref={codeRef} className={getLang(selected) ? `language-${getLang(selected)}` : ""}>
-                {content}
-              </code>
-            </pre>
-          )}
+          <div className="file-content-header"><span>{selected}</span></div>
+          {loading ? <div className="loading">Loading…</div> :
+            isJson(selected) ? <div className="file-json-wrap"><JsonView data={tryParseJson(content || "")} /></div> :
+            <pre className="code-block"><code ref={codeRef} className={getLang(selected) ? `language-${getLang(selected)}` : ""}>{content}</code></pre>
+          }
         </div>
       )}
     </div>
   );
 }
+
+function getLang(path: string): string { return EXT_LANG[path.split(".").pop()?.toLowerCase() || ""] || ""; }
+function isJson(path: string): boolean { return path.split(".").pop()?.toLowerCase() === "json"; }
+function tryParseJson(text: string): unknown { try { return JSON.parse(text); } catch { return text; } }
