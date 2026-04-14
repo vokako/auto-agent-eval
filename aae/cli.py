@@ -85,6 +85,14 @@ def cmd_run(args):
 
     result = subprocess.run(cmd, cwd=PROJECT_ROOT)
 
+    # Copy task yaml into job dir for reproducibility
+    job_dir = harbor.find_latest_job(Path(jobs_dir))
+    if job_dir:
+        import shutil
+        task_yaml = PROJECT_ROOT / "tasks" / f"{args.task}.yaml"
+        if task_yaml.exists():
+            shutil.copy2(task_yaml, job_dir / "task.yaml")
+
     if result.returncode == 0 and not args.no_judge:
         judge_cfg = cfg.get("judge")
         if judge_cfg:
