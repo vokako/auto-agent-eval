@@ -163,6 +163,39 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 .tc-name { flex: 1; font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; font-size: 12px; }
 .tc-dur { color: var(--muted); font-size: 11px; }
 
+/* File browser */
+.file-browser { display: flex; gap: 0; height: 100%; min-height: 300px; }
+.file-tree { width: 220px; min-width: 220px; overflow-y: auto; border-right: 1px solid var(--border); padding: 8px 0; }
+.file-dir { margin-bottom: 4px; }
+.dir-name { padding: 4px 12px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.file-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px 4px 20px; cursor: pointer; font-size: 12px; transition: background 0.1s; }
+.file-item:hover { background: var(--surface2); }
+.file-item.active { background: var(--surface3); color: var(--blue); }
+.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-size { color: var(--muted); font-size: 10px; margin-left: 8px; flex-shrink: 0; }
+.file-content { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.file-content-header { padding: 6px 14px; font-size: 12px; color: var(--dim); border-bottom: 1px solid var(--border); background: var(--surface2); }
+.code-block { flex: 1; overflow: auto; margin: 0; padding: 14px; font-size: 12px; font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; line-height: 1.6; background: var(--bg) !important; color: var(--dim); white-space: pre-wrap; word-break: break-all; }
+.code-block code { background: none !important; }
+
+/* Prism dark overrides */
+.token.comment, .token.prolog { color: #6a737d; }
+.token.keyword { color: #ff7b72; }
+.token.string { color: #a5d6ff; }
+.token.number { color: #79c0ff; }
+.token.boolean { color: #79c0ff; }
+.token.property { color: #d2a8ff; }
+.token.punctuation { color: #8b949e; }
+.token.operator { color: #ff7b72; }
+.token.function { color: #d2a8ff; }
+
+/* Detail tabs with file browser */
+.detail-tab-bar { display: flex; gap: 2px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+.detail-tab { background: none; border: 1px solid transparent; color: var(--dim); padding: 4px 12px; border-radius: var(--radius); cursor: pointer; font-size: 12px; font-weight: 500; }
+.detail-tab:hover { color: var(--text); }
+.detail-tab.active { background: var(--blue); color: #0a0e14; }
+.detail-tab-content { flex: 1; overflow-y: auto; }
+
 /* Compare */
 .cmp-cards { display: flex; gap: 14px; margin-bottom: 20px; }
 .cmp-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 28px; min-width: 170px; transition: border-color 0.15s; }

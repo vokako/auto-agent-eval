@@ -387,15 +387,57 @@ def get_job(config: str, timestamp: str):
     return result
 
 
+@app.get("/api/jobs/{config}/{timestamp}/tasks/{task_name}/files")
+def get_task_files(config: str, timestamp: str, task_name: str):
+    """List all files in a trial directory as a tree."""
+    job_dir = JOBS_DIR / config / timestamp
+    trial_dir = _find_trial(job_dir, task_name)
+    if not trial_dir:
+        raise HTTPException(404, "Task not found")
+
+    files = []
+    for f in sorted(trial_dir.rglob("*")):
+        if not f.is_file():
+            continue
+        rel = f.relative_to(trial_dir).as_posix()
+        files.append({"path": rel, "size": f.stat().st_size})
+    return files
+
+
+@app.get("/api/jobs/{config}/{timestamp}/tasks/{task_name}/files/{file_path:path}")
+def get_task_file(config: str, timestamp: str, task_name: str, file_path: str):
+    """Read a file from a trial directory."""
+    job_dir = JOBS_DIR / config / timestamp
+    trial_dir = _find_trial(job_dir, task_name)
+    if not trial_dir:
+        raise HTTPException(404, "Task not found")
+
+    target = trial_dir / file_path
+    if not target.is_file() or not target.resolve().is_relative_to(trial_dir.resolve()):
+        raise HTTPException(404, "File not found")
+
+    # Cap at 500KB
+    size = target.stat().st_size
+    if size > 512000:
+        content = target.read_text(errors="ignore")[:512000] + f"\n\n... truncated ({size} bytes total)"
+    else:
+        content = target.read_text(errors="ignore")
+
+    return {"path": file_path, "content": content, "size": size}
+
+
+def _find_trial(job_dir: Path, task_name: str) -> Path | None:
+    for d in job_dir.iterdir():
+        if d.is_dir() and d.name.startswith(task_name + "__"):
+            return d
+    return None
+
+
 @app.get("/api/jobs/{config}/{timestamp}/tasks/{task_name}")
 def get_task(config: str, timestamp: str, task_name: str):
     job_dir = JOBS_DIR / config / timestamp
 
-    trial_dir = None
-    for d in job_dir.iterdir():
-        if d.is_dir() and d.name.startswith(task_name + "__"):
-            trial_dir = d
-            break
+    trial_dir = _find_trial(job_dir, task_name)
     if not trial_dir:
         raise HTTPException(404, "Task not found")
 
@@ -434,11 +476,7 @@ def get_task(config: str, timestamp: str, task_name: str):
 def get_task_log(config: str, timestamp: str, task_name: str, log_type: str):
     job_dir = JOBS_DIR / config / timestamp
 
-    trial_dir = None
-    for d in job_dir.iterdir():
-        if d.is_dir() and d.name.startswith(task_name + "__"):
-            trial_dir = d
-            break
+    trial_dir = _find_trial(job_dir, task_name)
     if not trial_dir:
         raise HTTPException(404, "Task not found")
 

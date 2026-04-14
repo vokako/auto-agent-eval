@@ -8,9 +8,11 @@ import { AdapterTag } from "../components/AdapterTag";
 import { ResultBar } from "../components/ResultBar";
 import { TabSection } from "../components/TabSection";
 import { LazyLog } from "../components/LazyLog";
+import { FileBrowser } from "../components/FileBrowser";
 import type { TaskDetail } from "../types";
 
 type Filter = "all" | "pass" | "fail" | "timeout" | "error";
+type DetailTab = "info" | "files";
 
 export default function JobPage() {
   const { config, timestamp } = useParams();
@@ -20,6 +22,7 @@ export default function JobPage() {
   const [taskLoading, setTaskLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
+  const [detailTab, setDetailTab] = useState<DetailTab>("info");
 
   if (loading || !job) return <div className="loading">Loading…</div>;
 
@@ -35,6 +38,7 @@ export default function JobPage() {
 
   const openTask = async (name: string) => {
     setTaskLoading(true);
+    setDetailTab("info");
     setTask(await api.task(jobId, name));
     setTaskLoading(false);
   };
@@ -135,9 +139,15 @@ export default function JobPage() {
           <div className="detail-panel">
             <div className="detail-header">
               <h3>{task.name}</h3>
-              <button className="btn-ghost" onClick={() => setTask(null)}>✕</button>
+              <div>
+                <button className={`detail-tab ${detailTab === "info" ? "active" : ""}`} onClick={() => setDetailTab("info")}>Info</button>
+                <button className={`detail-tab ${detailTab === "files" ? "active" : ""}`} onClick={() => setDetailTab("files")}>Files</button>
+                <button className="btn-ghost" onClick={() => setTask(null)} style={{marginLeft: 8}}>✕</button>
+              </div>
             </div>
-            {taskLoading ? <div className="loading">Loading…</div> : (
+            {taskLoading ? <div className="loading">Loading…</div> : detailTab === "files" ? (
+              <FileBrowser jobId={jobId} taskName={task.name} />
+            ) : (
               <div className="detail-tabs">
                 {task.test_cases.length > 0 && (
                   <details open>
