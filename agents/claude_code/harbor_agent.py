@@ -90,8 +90,12 @@ class ClaudeCodeAgent(BaseInstalledAgent):
                 "mkdir -p /home/agent/.local/bin; "
                 "ln -sf /installed-agent/bin/claude /home/agent/.local/bin/claude; "
                 "chown -R agent:agent /home/agent; "
+                # chown WORKDIR (may differ from /app)
+                "chown -R agent:agent $(pwd) 2>/dev/null || true; "
                 "chown -R agent:agent /app 2>/dev/null || true; "
-                "chown -R agent:agent /logs 2>/dev/null || true"
+                "chown -R agent:agent /logs 2>/dev/null || true; "
+                # Save WORKDIR for later use in run()
+                "echo $(pwd) > /installed-agent/workdir"
             ),
         )
 
@@ -164,7 +168,7 @@ class ClaudeCodeAgent(BaseInstalledAgent):
         # Run as 'agent' user to avoid CC's root check
         cmd = (
             f"export {env_exports} PATH=/home/agent/.local/bin:/installed-agent/bin:$PATH; "
-            f"cd /app && "
+            f"cd $(cat /installed-agent/workdir 2>/dev/null || echo /app) && "
             f"mkdir -p $CLAUDE_CONFIG_DIR/debug $CLAUDE_CONFIG_DIR/projects/-app "
             f"$CLAUDE_CONFIG_DIR/shell-snapshots $CLAUDE_CONFIG_DIR/statsig "
             f"$CLAUDE_CONFIG_DIR/todos $CLAUDE_CONFIG_DIR/skills && "
