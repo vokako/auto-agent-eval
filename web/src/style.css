@@ -98,11 +98,18 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 .row:hover input[type="checkbox"] { opacity: 0.7; }
 .row input[type="checkbox"]:checked { opacity: 1; }
 
-/* Job info card */
-.job-info { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 24px; margin-bottom: 20px; }
-.info-grid { display: flex; gap: 36px; margin-bottom: 14px; }
-.info-item label { display: block; font-size: 10px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.6px; margin-bottom: 3px; font-weight: 500; }
-.info-item span { font-size: 14px; }
+/* Job header card */
+.job-header-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 24px; margin-bottom: 16px; }
+.job-header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.job-header-meta { display: flex; align-items: center; gap: 12px; }
+.job-header-main { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; }
+.job-header-left h2 { font-size: 18px; font-weight: 600; margin: 0; }
+.job-header-left h2 .dim { font-weight: 400; font-size: 15px; }
+.job-header-left .dim { font-size: 13px; }
+.job-header-stats { display: flex; gap: 24px; }
+.stat-block { text-align: right; }
+.stat-value { margin-bottom: 2px; }
+.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
 .result-bar { height: 6px; border-radius: 3px; display: flex; overflow: hidden; background: var(--surface3); gap: 1px; }
 .bar-pass { background: var(--green); border-radius: 3px; }
 .bar-fail { background: var(--red); border-radius: 3px; }

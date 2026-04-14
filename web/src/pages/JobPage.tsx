@@ -63,19 +63,29 @@ export default function JobPage() {
 
   return (
     <>
-      <header>
-        <Breadcrumb items={[{ label: "Jobs", to: "/" }, { label: config! }]} />
-      </header>
-
-      <div className="job-info">
-        <div className="info-grid">
-          <div className="info-item"><label>Agent</label><span>{job.agent || "—"}</span></div>
-          <div className="info-item"><label>Model</label><span>{job.model || "—"}</span></div>
-          <div className="info-item"><label>Adapter</label><AdapterTag adapter={job.adapter} version={job.version} /></div>
-          <div className="info-item"><label>Dataset</label><span>{job.dataset || "—"}</span></div>
-          <div className="info-item"><label>Date</label><span>{fmtTime(job.started_at)}</span></div>
-          <div className="info-item"><label>Task Pass</label><span className={`pill ${rateClass(rate)}`}>{rate.toFixed(1)}%</span><span className="info-sub">{pass}/{tasks.length}</span></div>
-          <div className="info-item"><label>Test Pass</label><span className={`pill ${rateClass(testRate)}`}>{testRate.toFixed(1)}%</span><span className="info-sub">{passedTests}/{totalTests}</span></div>
+      <div className="job-header-card">
+        <div className="job-header-top">
+          <Breadcrumb items={[{ label: "Jobs", to: "/" }, { label: config! }]} />
+          <div className="job-header-meta">
+            <span className="dim">{fmtTime(job.started_at)}</span>
+            <AdapterTag adapter={job.adapter} version={job.version} />
+          </div>
+        </div>
+        <div className="job-header-main">
+          <div className="job-header-left">
+            <h2>{job.agent || "—"} <span className="dim">/ {job.model || "?"}</span></h2>
+            <span className="dim">{job.dataset || ""}</span>
+          </div>
+          <div className="job-header-stats">
+            <div className="stat-block">
+              <div className="stat-value"><span className={`pill ${rateClass(rate)}`}>{rate.toFixed(1)}%</span></div>
+              <div className="stat-label">Task Pass <span className="info-sub">{pass}/{tasks.length}</span></div>
+            </div>
+            <div className="stat-block">
+              <div className="stat-value"><span className={`pill ${rateClass(testRate)}`}>{testRate.toFixed(1)}%</span></div>
+              <div className="stat-label">Test Pass <span className="info-sub">{passedTests}/{totalTests}</span></div>
+            </div>
+          </div>
         </div>
         <ResultBar pass={pass} fail={fail - timeout - err} error={err + timeout} />
         <div className="result-legend">
