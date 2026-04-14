@@ -1,19 +1,28 @@
-# CC + Sonnet 4.6 via Bedrock, TB2 lite (51 tasks)
-
 dataset: terminal-bench/terminal-bench-2
 task_list: tb2-lite.txt
-
 agent:
   name: claude_code
   import_path: agents.claude_code.harbor_agent:ClaudeCodeAgent
   model: global.anthropic.claude-sonnet-4-6
   env:
-    CLAUDE_CODE_USE_BEDROCK: "1"
+    CLAUDE_CODE_USE_BEDROCK: '1'
     AWS_REGION: us-east-1
+  system_prompt: 'You are an autonomous coding agent. Follow these rules strictly:
 
+    - Execute the task completely without asking any questions
+
+    - Make all decisions yourself (choose defaults when not specified)
+
+    - Never ask for clarification, paths, or preferences
+
+    - If a directory or file location is not specified, explore the filesystem to
+    find it
+
+    - Try multiple approaches if the first one fails
+
+    - Verify your work before finishing'
 run:
   concurrent: 8
-
 judge:
   model: claude-opus-4.6
   rubric: default

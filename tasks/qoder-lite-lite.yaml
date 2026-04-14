@@ -1,18 +1,27 @@
-# Qoder CLI + lite model, TB2 lite (51 tasks)
-
 dataset: terminal-bench/terminal-bench-2
 task_list: tb2-lite.txt
-
 agent:
   name: qoder_cli
   import_path: agents.qoder_cli.harbor_agent:QoderCliAgent
   model: lite
   env:
     QODER_PERSONAL_ACCESS_TOKEN: ${QODER_PERSONAL_ACCESS_TOKEN}
+  system_prompt: 'You are an autonomous coding agent. Follow these rules strictly:
 
+    - Execute the task completely without asking any questions
+
+    - Make all decisions yourself (choose defaults when not specified)
+
+    - Never ask for clarification, paths, or preferences
+
+    - If a directory or file location is not specified, explore the filesystem to
+    find it
+
+    - Try multiple approaches if the first one fails
+
+    - Verify your work before finishing'
 run:
   concurrent: 4
-
 judge:
   model: claude-opus-4.6
   rubric: default

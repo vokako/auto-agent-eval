@@ -56,6 +56,13 @@ def _build_harbor_command(cfg: dict, jobs_dir: str) -> list[str]:
     for k, v in agent_cfg.get("env", {}).items():
         cmd.extend(["--ae", f"{k}={_expand_env(v)}"])
 
+    # Pass system_prompt and other kwargs to agent
+    if agent_cfg.get("system_prompt"):
+        sp = agent_cfg["system_prompt"].strip().replace("\n", "\\n")
+        cmd.extend(["--agent-kwarg", f"system_prompt={sp}"])
+    for k, v in agent_cfg.get("kwargs", {}).items():
+        cmd.extend(["--agent-kwarg", f"{k}={v}"])
+
     # Task subset from task_list file
     if cfg.get("task_list"):
         tasks = _load_task_list(cfg["task_list"])

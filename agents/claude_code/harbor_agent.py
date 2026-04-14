@@ -65,6 +65,10 @@ class ClaudeCodeAgent(BaseInstalledAgent):
     CLI_FLAGS = _BuiltinCC.CLI_FLAGS
     ENV_VARS = _BuiltinCC.ENV_VARS
 
+    def __init__(self, *args, system_prompt: str = "", **kwargs):
+        super().__init__(*args, **kwargs)
+        self._system_prompt = system_prompt.replace("\\n", "\n")
+
     @staticmethod
     def name() -> str:
         return "claude-code"
@@ -145,6 +149,8 @@ class ClaudeCodeAgent(BaseInstalledAgent):
     async def run(
         self, instruction: str, environment: BaseEnvironment, context: AgentContext
     ) -> None:
+        if self._system_prompt:
+            instruction = self._system_prompt.strip() + "\n\n" + instruction
         escaped = shlex.quote(instruction)
         env = self._build_env()
         # Merge _extra_env (from --ae flags) so Bedrock creds are available
