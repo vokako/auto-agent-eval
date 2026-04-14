@@ -1,7 +1,7 @@
 export function fmtTime(ts: string): string {
   try {
     const d = new Date(ts);
-    return isNaN(d.getTime()) ? ts : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    return isNaN(d.getTime()) ? ts : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
   } catch { return ts; }
 }
 
