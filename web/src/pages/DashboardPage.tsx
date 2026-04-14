@@ -102,11 +102,13 @@ export default function DashboardPage() {
             <ColumnRangeFilter value={fMinTasks} max={100} onChange={setFMinTasks} />
           </th>
           <th className="sort r" onClick={() => toggleSort("passed")}>Pass{arrow("passed")}</th>
+          <th className="r">Fail</th>
+          <th className="r">⏰</th>
+          <th className="r">💥</th>
           <th className="sort r" onClick={() => toggleSort("rate")}>
             Rate{arrow("rate")}
             <ColumnRangeFilter value={fMinRate} max={100} onChange={setFMinRate} suffix="%" />
           </th>
-          <th className="sort r" onClick={() => toggleSort("errors")}>Err{arrow("errors")}</th>
           <th className="r">Wall</th>
           <th className="r">Σ Task</th>
           <th>Status</th>
@@ -121,8 +123,10 @@ export default function DashboardPage() {
             <td className="dim">{j.dataset ? j.dataset.split("/").pop() : "—"}</td>
             <td className="r mono">{j.total}</td>
             <td className="r mono">{j.passed}</td>
-            <td className="r"><span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span></td>
+            <td className="r mono">{j.failed - j.timeouts - j.errors > 0 ? j.failed - j.timeouts - j.errors : "—"}</td>
+            <td className="r mono">{j.timeouts || "—"}</td>
             <td className="r mono">{j.errors || "—"}</td>
+            <td className="r"><span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span></td>
             <td className="r dim">{j.duration || "—"}</td>
             <td className="r dim">{j.total_task_time || "—"}</td>
             <td>

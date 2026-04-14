@@ -10,6 +10,7 @@ export interface JobSummary {
   passed: number;
   failed: number;
   errors: number;
+  timeouts: number;
   total: number;
   rate: number;
   duration: string;

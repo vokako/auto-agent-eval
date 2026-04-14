@@ -182,6 +182,8 @@ def list_jobs():
                 passed = sum(1 for t in tasks.values() if t["passed"])
                 total = len(tasks)
                 errors = sum(1 for t in tasks.values() if t.get("error_type"))
+                timeouts = sum(1 for t in tasks.values() if t.get("error_type") == "AgentTimeoutError")
+                other_errors = errors - timeouts
                 verified = total - sum(1 for t in tasks.values() if t.get("error_type") and not t["passed"] and t["reward"] == 0.0 and "reward" not in t.get("error_type", "").lower())
                 agent_name, model_name = _read_agent_info(job_dir)
                 extra = _agent_extra(job_dir)
@@ -199,7 +201,8 @@ def list_jobs():
                     "dataset": extra["dataset"],
                     "passed": passed,
                     "failed": total - passed,
-                    "errors": errors,
+                    "errors": other_errors,
+                    "timeouts": timeouts,
                     "total": total,
                     "rate": round(passed / total * 100, 1) if total else 0,
                     "duration": _duration_str(started, finished),
