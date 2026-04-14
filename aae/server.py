@@ -20,6 +20,13 @@ app = FastAPI(title="AAE Dashboard")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
+def _ensure_utc(ts: str | None) -> str | None:
+    """Append Z to naive timestamps so browsers parse them as UTC."""
+    if ts and not ts.endswith("Z") and "+" not in ts:
+        return ts + "Z"
+    return ts
+
+
 def _parse_result(result_file: Path) -> dict:
     data = json.load(open(result_file))
     evals = data.get("stats", {}).get("evals", {})
@@ -49,8 +56,8 @@ def _parse_result(result_file: Path) -> dict:
         "n_trials": ev.get("n_trials", 0),
         "n_errors": ev.get("n_errors", 0),
         "n_total": data.get("n_total_trials", 0),
-        "started_at": data.get("started_at"),
-        "finished_at": data.get("finished_at"),
+        "started_at": _ensure_utc(data.get("started_at")),
+        "finished_at": _ensure_utc(data.get("finished_at")),
     }
 
 
