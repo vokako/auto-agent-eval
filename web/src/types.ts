@@ -68,5 +68,5 @@ export interface CompareRow {
 export interface CompareResult {
   jobs: string[];
   tasks: CompareRow[];
-  summary: Record<string, { passed: number; total: number }>;
+  summary: Record<string, { passed: number; failed: number; total: number; timeouts: number; errors: number; rate: number; agent: string; model: string }>;
 }

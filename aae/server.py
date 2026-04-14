@@ -537,7 +537,24 @@ def compare(ids: str):
     summary = {}
     for jid in job_ids:
         tasks = results.get(jid, {})
-        summary[jid] = {"passed": sum(1 for t in tasks.values() if t["passed"]), "total": len(tasks)}
+        passed = sum(1 for t in tasks.values() if t["passed"])
+        total = len(tasks)
+        timeouts = sum(1 for t in tasks.values() if t.get("error_type") == "AgentTimeoutError")
+        errors = sum(1 for t in tasks.values() if t.get("error_type") and t.get("error_type") != "AgentTimeoutError")
+        # Read agent/model info
+        parts = jid.split("/")
+        job_dir = JOBS_DIR / parts[0] / parts[1]
+        agent_name, model_name = _read_agent_info(job_dir)
+        summary[jid] = {
+            "passed": passed,
+            "failed": total - passed,
+            "total": total,
+            "timeouts": timeouts,
+            "errors": errors,
+            "rate": round(passed / total * 100, 1) if total else 0,
+            "agent": agent_name,
+            "model": model_name,
+        }
 
     return {"jobs": job_ids, "tasks": rows, "summary": summary}
 

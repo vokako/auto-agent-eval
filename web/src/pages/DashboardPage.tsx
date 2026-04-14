@@ -46,13 +46,6 @@ export default function DashboardPage() {
       return (sortAsc ? 1 : -1) * (va < vb ? -1 : va > vb ? 1 : 0);
     });
 
-  const toggle = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const next = new Set(selected);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setSelected(next);
-  };
-
   return (
     <>
       <header>
@@ -115,7 +108,7 @@ export default function DashboardPage() {
         </tr></thead>
         <tbody>{sorted.map(j => (
           <tr key={j.id} className="row" onClick={() => navigate(`/jobs/${j.id}`)}>
-            <td><input type="checkbox" checked={selected.has(j.id)} onClick={e => toggle(j.id, e)} readOnly /></td>
+            <td><label onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.has(j.id)} onChange={() => { const n = new Set(selected); n.has(j.id) ? n.delete(j.id) : n.add(j.id); setSelected(n); }} /></label></td>
             <td className="bold">{j.config}</td>
             <td className="dim">{j.agent || "—"} <span className="muted">/ {j.model || "?"}</span></td>
             <td><AdapterTag adapter={j.adapter} version={j.version} /></td>
