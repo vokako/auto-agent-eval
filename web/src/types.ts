@@ -57,9 +57,6 @@ export interface TestCase {
 export interface TaskDetail {
   name: string;
   instruction: string;
-  agent_log: string;
-  verifier_log: string;
-  trial_log: string;
   test_cases: TestCase[];
 }
 

@@ -339,6 +339,7 @@ def get_task(config: str, timestamp: str, task_name: str):
     if not trial_dir:
         raise HTTPException(404, "Task not found")
 
+    # Instruction
     instruction = ""
     task_cache = HARBOR_CACHE / task_name
     if task_cache.exists():
@@ -347,28 +348,7 @@ def get_task(config: str, timestamp: str, task_name: str):
                 instruction = (Path(root) / "instruction.md").read_text(errors="ignore")
                 break
 
-    agent_log = ""
-    agent_dir = trial_dir / "agent"
-    if agent_dir.exists():
-        for f in agent_dir.iterdir():
-            if f.is_file() and f.suffix == ".txt":
-                agent_log = f.read_text(errors="ignore")
-                break
-
-    verifier_log = ""
-    verifier_dir = trial_dir / "verifier"
-    if verifier_dir.exists():
-        for f in verifier_dir.iterdir():
-            if f.is_file():
-                verifier_log = f.read_text(errors="ignore")
-                break
-
-    trial_log = ""
-    trial_log_f = trial_dir / "trial.log"
-    if trial_log_f.exists():
-        trial_log = trial_log_f.read_text(errors="ignore")
-
-    # Test case breakdown from ctrf.json
+    # Test cases from ctrf.json
     test_cases = []
     ctrf_f = trial_dir / "verifier" / "ctrf.json"
     if ctrf_f.exists():
@@ -386,11 +366,43 @@ def get_task(config: str, timestamp: str, task_name: str):
     return {
         "name": task_name,
         "instruction": instruction,
-        "agent_log": agent_log[-100000:],
-        "verifier_log": verifier_log[-50000:],
-        "trial_log": trial_log[-20000:],
         "test_cases": test_cases,
     }
+
+
+@app.get("/api/jobs/{config}/{timestamp}/tasks/{task_name}/logs/{log_type}")
+def get_task_log(config: str, timestamp: str, task_name: str, log_type: str):
+    job_dir = JOBS_DIR / config / timestamp
+
+    trial_dir = None
+    for d in job_dir.iterdir():
+        if d.is_dir() and d.name.startswith(task_name + "__"):
+            trial_dir = d
+            break
+    if not trial_dir:
+        raise HTTPException(404, "Task not found")
+
+    content = ""
+    if log_type == "agent":
+        agent_dir = trial_dir / "agent"
+        if agent_dir.exists():
+            for f in agent_dir.iterdir():
+                if f.is_file() and f.suffix == ".txt":
+                    content = f.read_text(errors="ignore")[-100000:]
+                    break
+    elif log_type == "verifier":
+        verifier_dir = trial_dir / "verifier"
+        if verifier_dir.exists():
+            for f in verifier_dir.iterdir():
+                if f.is_file() and f.name != "ctrf.json":
+                    content = f.read_text(errors="ignore")[-50000:]
+                    break
+    elif log_type == "trial":
+        trial_log_f = trial_dir / "trial.log"
+        if trial_log_f.exists():
+            content = trial_log_f.read_text(errors="ignore")[-20000:]
+
+    return {"content": content}
 
 
 @app.get("/api/compare")

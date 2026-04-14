@@ -138,6 +138,8 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 .icon.pass { color: var(--green); }
 .icon.fail { color: var(--red); }
 .err-tag { font-size: 10px; color: var(--yellow); background: var(--yellow-bg); padding: 2px 7px; border-radius: 4px; font-weight: 500; }
+.timeout-tag { font-size: 10px; color: var(--red); background: var(--red-bg); padding: 2px 7px; border-radius: 4px; font-weight: 500; }
+.legend-timeout { color: var(--red); }
 .dur-tag { font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
 .cost-tag { font-size: 10px; color: var(--purple); background: rgba(167,139,250,0.08); padding: 2px 6px; border-radius: 4px; }
 .tests-tag { font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }

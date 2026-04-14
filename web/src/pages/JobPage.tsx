@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../lib/api";
-import { fmtTime, fmtSize, rateClass } from "../lib/format";
+import { fmtTime, rateClass } from "../lib/format";
 import { useFetch } from "../hooks/useFetch";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { AdapterTag } from "../components/AdapterTag";
 import { ResultBar } from "../components/ResultBar";
 import { TabSection } from "../components/TabSection";
+import { LazyLog } from "../components/LazyLog";
 import type { TaskDetail } from "../types";
 
-type Filter = "all" | "pass" | "fail" | "error";
+type Filter = "all" | "pass" | "fail" | "timeout" | "error";
 
 export default function JobPage() {
   const { config, timestamp } = useParams();
@@ -25,7 +26,8 @@ export default function JobPage() {
   const tasks = job.tasks;
   const pass = tasks.filter(t => t.passed).length;
   const fail = tasks.filter(t => !t.passed).length;
-  const err = tasks.filter(t => !!t.error_type).length;
+  const timeout = tasks.filter(t => t.error_type === "AgentTimeoutError").length;
+  const err = tasks.filter(t => t.error_type && t.error_type !== "AgentTimeoutError").length;
   const rate = tasks.length ? pass / tasks.length * 100 : 0;
   const totalTests = tasks.reduce((s, t) => s + t.tests_total, 0);
   const passedTests = tasks.reduce((s, t) => s + t.tests_passed, 0);
@@ -41,10 +43,19 @@ export default function JobPage() {
     .filter(t => {
       if (filter === "pass") return t.passed;
       if (filter === "fail") return !t.passed;
-      if (filter === "error") return !!t.error_type;
+      if (filter === "timeout") return t.error_type === "AgentTimeoutError";
+      if (filter === "error") return t.error_type && t.error_type !== "AgentTimeoutError";
       return true;
     })
     .filter(t => !search || t.name.includes(search));
+
+  const filterCounts: Record<Filter, number> = {
+    all: tasks.length,
+    pass,
+    fail,
+    timeout,
+    error: err,
+  };
 
   return (
     <>
@@ -62,11 +73,12 @@ export default function JobPage() {
           <div className="info-item"><label>Task Pass</label><span className={`pill ${rateClass(rate)}`}>{rate.toFixed(1)}%</span><span className="info-sub">{pass}/{tasks.length}</span></div>
           <div className="info-item"><label>Test Pass</label><span className={`pill ${rateClass(testRate)}`}>{testRate.toFixed(1)}%</span><span className="info-sub">{passedTests}/{totalTests}</span></div>
         </div>
-        <ResultBar pass={pass} fail={fail} error={err} />
+        <ResultBar pass={pass} fail={fail - timeout - err} error={err + timeout} />
         <div className="result-legend">
-          <span className="legend-pass">✓ {pass} pass</span>
-          <span className="legend-fail">✗ {fail} fail</span>
-          {err > 0 && <span className="legend-err">⚠ {err} error</span>}
+          <span className="legend-pass">Pass {pass}</span>
+          <span className="legend-fail">Fail {fail - timeout - err}</span>
+          {timeout > 0 && <span className="legend-timeout">Timeout {timeout}</span>}
+          {err > 0 && <span className="legend-err">Error {err}</span>}
         </div>
       </div>
 
@@ -74,10 +86,13 @@ export default function JobPage() {
         <div className={`task-panel ${task ? "narrow" : ""}`}>
           <div className="panel-toolbar">
             <div className="tab-group">
-              {(["all", "pass", "fail", "error"] as const).map(f => {
-                const cnt = f === "all" ? tasks.length : f === "pass" ? pass : f === "fail" ? fail : err;
-                return <button key={f} className={`tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>{f} ({cnt})</button>;
-              })}
+              {(["all", "pass", "fail", "timeout", "error"] as const).map(f => (
+                filterCounts[f] > 0 || f === "all" ? (
+                  <button key={f} className={`tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
+                    {f} ({filterCounts[f]})
+                  </button>
+                ) : null
+              ))}
             </div>
             <input className="search small" placeholder="Search task…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
@@ -105,7 +120,10 @@ export default function JobPage() {
                       ) : "—"}
                     </td>
                     <td className="r">{t.cost ? <span className="cost-tag">{t.cost}</span> : "—"}</td>
-                    <td>{t.error_type && <span className="err-tag">{t.error_type.replace("Error", "")}</span>}</td>
+                    <td>
+                      {t.error_type === "AgentTimeoutError" && <span className="timeout-tag">Timeout</span>}
+                      {t.error_type && t.error_type !== "AgentTimeoutError" && <span className="err-tag">{t.error_type.replace("Error", "")}</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -136,9 +154,9 @@ export default function JobPage() {
                   </details>
                 )}
                 <TabSection title="Instruction" content={task.instruction} defaultOpen={task.test_cases.length === 0} />
-                <TabSection title={`Agent Log (${fmtSize(task.agent_log.length)})`} content={task.agent_log} />
-                <TabSection title="Verifier Log" content={task.verifier_log} />
-                <TabSection title="Trial Log" content={task.trial_log} />
+                <LazyLog title="Agent Log" jobId={jobId} taskName={task.name} logType="agent" />
+                <LazyLog title="Verifier Log" jobId={jobId} taskName={task.name} logType="verifier" />
+                <LazyLog title="Trial Log" jobId={jobId} taskName={task.name} logType="trial" />
               </div>
             )}
           </div>
