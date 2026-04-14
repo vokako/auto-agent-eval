@@ -19,6 +19,8 @@ agent:
 
 run:
   concurrent: 4                       # parallel tasks
+  artifacts:                          # container paths to save after each trial (optional)
+    - /app
   tasks:                              # subset (omit for all)
     - hello-world
     - fix-permissions

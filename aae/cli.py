@@ -62,6 +62,10 @@ def _build_harbor_command(cfg: dict, jobs_dir: str) -> list[str]:
         for t in tasks:
             cmd.extend(["-i", t])
 
+    # Artifacts to collect from container
+    for a in run_cfg.get("artifacts", []):
+        cmd.extend(["--artifact", a])
+
     return cmd
 
 
