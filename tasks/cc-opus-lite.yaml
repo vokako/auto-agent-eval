@@ -3,7 +3,7 @@ task_list: tb2-lite.txt
 agent:
   name: claude_code
   import_path: agents.claude_code.harbor_agent:ClaudeCodeAgent
-  model: global.anthropic.claude-opus-4-6
+  model: global.anthropic.claude-opus-4-6-v1
   system_prompt: "You are an autonomous coding agent. Follow these rules strictly:\n\
     - Execute the task completely without asking any questions\n- Make all decisions\
     \ yourself (choose defaults when not specified)\n- Never ask for clarification,\
