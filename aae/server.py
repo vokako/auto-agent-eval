@@ -163,10 +163,26 @@ def _sum_trial_durations(job_dir: Path) -> str:
     return f"{hours}h{mins:02d}m" if hours else f"{mins}m"
 
 
+_jobs_cache: dict = {"data": None, "mtime": 0}
+
+
 @app.get("/api/jobs")
 def list_jobs():
     if not JOBS_DIR.exists():
         return []
+
+    # Check if any result.json changed since last cache
+    latest_mtime = 0
+    for config_dir in JOBS_DIR.iterdir():
+        if not config_dir.is_dir() or config_dir.name.startswith("."):
+            continue
+        for job_dir in config_dir.iterdir():
+            rf = job_dir / "result.json"
+            if rf.exists():
+                latest_mtime = max(latest_mtime, rf.stat().st_mtime)
+
+    if _jobs_cache["data"] is not None and _jobs_cache["mtime"] >= latest_mtime:
+        return _jobs_cache["data"]
 
     jobs = []
     for config_dir in sorted(JOBS_DIR.iterdir()):
@@ -214,7 +230,40 @@ def list_jobs():
                 })
             except Exception:
                 continue
+    _jobs_cache["data"] = jobs
+    _jobs_cache["mtime"] = latest_mtime
     return jobs
+
+
+CACHE_DIR = PROJECT_ROOT / "jobs" / ".cache"
+
+
+def _get_cached_job(job_dir: Path) -> dict | None:
+    """Return cached job detail if result.json hasn't changed."""
+    rf = job_dir / "result.json"
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_key = job_dir.relative_to(JOBS_DIR).as_posix().replace("/", "__")
+    cache_f = CACHE_DIR / f"{cache_key}.json"
+    if cache_f.exists():
+        try:
+            cached = json.load(open(cache_f))
+            if cached.get("_mtime") == rf.stat().st_mtime:
+                return cached
+        except Exception:
+            pass
+    return None
+
+
+def _set_cached_job(job_dir: Path, data: dict):
+    rf = job_dir / "result.json"
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_key = job_dir.relative_to(JOBS_DIR).as_posix().replace("/", "__")
+    cache_f = CACHE_DIR / f"{cache_key}.json"
+    data["_mtime"] = rf.stat().st_mtime
+    try:
+        json.dump(data, open(cache_f, "w"), ensure_ascii=False)
+    except Exception:
+        pass
 
 
 @app.get("/api/jobs/{config}/{timestamp}")
@@ -223,6 +272,11 @@ def get_job(config: str, timestamp: str):
     rf = job_dir / "result.json"
     if not rf.exists():
         raise HTTPException(404, "Job not found")
+
+    cached = _get_cached_job(job_dir)
+    if cached:
+        cached.pop("_mtime", None)
+        return cached
 
     parsed = _parse_result(rf)
     tasks = parsed["tasks"]
@@ -311,7 +365,7 @@ def get_job(config: str, timestamp: str):
             "tests_total": tests_total,
         })
 
-    return {
+    result = {
         "config": config,
         "timestamp": timestamp,
         "agent": agent_name,
@@ -325,6 +379,12 @@ def get_job(config: str, timestamp: str):
         "n_trials": parsed.get("n_trials", 0),
         "n_errors": parsed.get("n_errors", 0),
     }
+
+    # Cache if job is finished
+    if parsed.get("finished_at"):
+        _set_cached_job(job_dir, result)
+
+    return result
 
 
 @app.get("/api/jobs/{config}/{timestamp}/tasks/{task_name}")
