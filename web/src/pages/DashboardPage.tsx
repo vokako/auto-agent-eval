@@ -97,21 +97,21 @@ export default function DashboardPage() {
             <ColumnFilter values={adapters} selected={fAdapter} onChange={setFAdapter} />
           </th>
           <th>Dataset</th>
-          <th className="sort r" onClick={() => toggleSort("total")}>
+          <th className="sort c" onClick={() => toggleSort("total")}>
             Tasks{arrow("total")}
             <ColumnRangeFilter value={fMinTasks} max={100} onChange={setFMinTasks} />
           </th>
-          <th className="sort r" onClick={() => toggleSort("passed")}>Pass{arrow("passed")}</th>
-          <th className="r">Fail</th>
-          <th className="r">Timeout</th>
-          <th className="r">Error</th>
-          <th className="sort r" onClick={() => toggleSort("rate")}>
+          <th className="sort c" onClick={() => toggleSort("passed")}>Pass{arrow("passed")}</th>
+          <th className="c">Fail</th>
+          <th className="c">Timeout</th>
+          <th className="c">Error</th>
+          <th className="sort c" onClick={() => toggleSort("rate")}>
             Rate{arrow("rate")}
             <ColumnRangeFilter value={fMinRate} max={100} onChange={setFMinRate} suffix="%" />
           </th>
-          <th className="r">Σ Task</th>
-          <th>Status</th>
-          <th className="sort" onClick={() => toggleSort("started_at")}>Date{arrow("started_at")}</th>
+          <th className="c">Σ Task</th>
+          <th className="c">Status</th>
+          <th className="sort c" onClick={() => toggleSort("started_at")}>Date{arrow("started_at")}</th>
         </tr></thead>
         <tbody>{sorted.map(j => (
           <tr key={j.id} className="row" onClick={() => navigate(`/jobs/${j.id}`)}>
@@ -120,21 +120,21 @@ export default function DashboardPage() {
             <td className="dim">{j.agent || "—"} <span className="muted">/ {j.model || "?"}</span></td>
             <td><AdapterTag adapter={j.adapter} version={j.version} /></td>
             <td className="dim">{j.dataset ? j.dataset.split("/").pop() : "—"}</td>
-            <td className="r mono">{j.total}</td>
-            <td className="r mono">{j.passed}</td>
-            <td className="r mono">{j.failed - j.timeouts - j.errors > 0 ? j.failed - j.timeouts - j.errors : "—"}</td>
-            <td className="r mono">{j.timeouts || "—"}</td>
-            <td className="r mono">{j.errors || "—"}</td>
-            <td className="r"><span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span></td>
-            <td className="r dim">{j.total_task_time || "—"}</td>
-            <td>
+            <td className="c mono">{j.total}</td>
+            <td className="c mono">{j.passed}</td>
+            <td className="c mono">{j.failed - j.timeouts - j.errors > 0 ? j.failed - j.timeouts - j.errors : "—"}</td>
+            <td className="c mono">{j.timeouts || "—"}</td>
+            <td className="c mono">{j.errors || "—"}</td>
+            <td className="c"><span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span></td>
+            <td className="c dim">{j.total_task_time || "—"}</td>
+            <td className="c">
               {j.status === "running" ? (
                 <span className="status-running">● {j.progress}/{j.n_total}</span>
               ) : (
                 <span className="status-done">✓</span>
               )}
             </td>
-            <td className="dim">{fmtTime(j.started_at)}</td>
+            <td className="c dim">{fmtTime(j.started_at)}</td>
           </tr>
         ))}</tbody>
       </table>

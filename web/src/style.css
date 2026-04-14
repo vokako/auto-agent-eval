@@ -83,6 +83,7 @@ th.sort { cursor: pointer; user-select: none; }
 th.sort:hover { color: var(--blue); }
 td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: background 0.1s; }
 .r { text-align: right; }
+.c { text-align: center; }
 .mono { font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; font-size: 13px; }
 .bold { font-weight: 600; }
 .dim { color: var(--dim); }
