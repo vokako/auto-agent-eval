@@ -1,11 +1,12 @@
-"""Claude Code agent for Harbor — pre-upload binary instead of curl|bash install.
+"""Claude Code agent for Harbor — pre-upload binary, matching built-in behavior.
 
-Avoids OOM kills in memory-constrained containers by uploading the bundled
-CC binary directly, instead of downloading+installing inside the container.
+Uploads the bundled CC binary instead of curl|bash to avoid OOM in
+memory-constrained containers. Runs via exec_as_agent like the built-in adapter.
 """
 
 import json
 import os
+import re
 import shlex
 import urllib.request
 from pathlib import Path
@@ -17,6 +18,9 @@ from harbor.agents.installed.base import (
     with_prompt_template,
 )
 from harbor.agents.installed.claude_code import ClaudeCode as _BuiltinCC
+from harbor.environments.base import BaseEnvironment
+from harbor.models.agent.context import AgentContext
+from harbor.models.trial.paths import EnvironmentPaths
 
 
 def _get_ec2_credentials() -> dict[str, str]:
@@ -45,8 +49,6 @@ def _get_ec2_credentials() -> dict[str, str]:
         }
     except Exception:
         return {}
-from harbor.environments.base import BaseEnvironment
-from harbor.models.agent.context import AgentContext
 
 
 def _find_bundled_binary() -> Path:
@@ -74,56 +76,65 @@ class ClaudeCodeAgent(BaseInstalledAgent):
         return "claude-code"
 
     def get_version_command(self) -> str | None:
-        return 'export PATH="/installed-agent/bin:$PATH"; claude --version'
+        return 'export PATH="$HOME/.local/bin:$PATH"; claude --version'
 
     def parse_version(self, stdout: str) -> str:
-        import re
         match = re.search(r"(\d+\.\d+\.\d+)", stdout.strip())
         return match.group(1) if match else stdout.strip()
 
     async def install(self, environment: BaseEnvironment) -> None:
-        binary = _find_bundled_binary()
-        await self.exec_as_root(environment, "mkdir -p /installed-agent/bin")
-        await environment.upload_file(str(binary), "/installed-agent/bin/claude")
+        # Install system deps (root) — same as built-in
         await self.exec_as_root(
             environment,
             command=(
-                "chmod +x /installed-agent/bin/claude && "
-                # CC refuses bypassPermissions as root — create non-root user
-                "id -u agent &>/dev/null 2>&1 || useradd -m -s /bin/bash agent; "
-                "mkdir -p /home/agent/.local/bin; "
-                "ln -sf /installed-agent/bin/claude /home/agent/.local/bin/claude; "
-                "chown -R agent:agent /home/agent; "
-                # chown WORKDIR (may differ from /app)
-                "chown -R agent:agent $(pwd) 2>/dev/null || true; "
-                "chown -R agent:agent /app 2>/dev/null || true; "
-                "chown -R agent:agent /logs 2>/dev/null || true; "
-                # Save WORKDIR for later use in run()
-                "echo $(pwd) > /installed-agent/workdir"
+                "if command -v apk &> /dev/null; then"
+                "  apk add --no-cache curl bash nodejs npm;"
+                " elif command -v apt-get &> /dev/null; then"
+                "  apt-get update && apt-get install -y curl;"
+                " elif command -v yum &> /dev/null; then"
+                "  yum install -y curl;"
+                " else"
+                '  echo "Warning: No known package manager found" >&2;'
+                " fi"
+            ),
+            env={"DEBIAN_FRONTEND": "noninteractive"},
+        )
+
+        # Install CC via curl|bash — same as built-in, gets latest version
+        version_flag = f" {self._version}" if self._version else ""
+        await self.exec_as_agent(
+            environment,
+            command=(
+                "set -euo pipefail; "
+                "if command -v apk &> /dev/null; then"
+                f"  npm install -g @anthropic-ai/claude-code{'@' + self._version if self._version else ''};"
+                " else"
+                f"  curl -fsSL https://claude.ai/install.sh | bash -s --{version_flag};"
+                " fi && "
+                'echo \'export PATH="$HOME/.local/bin:$PATH"\' >> ~/.bashrc && '
+                'export PATH="$HOME/.local/bin:$PATH" && '
+                "claude --version"
             ),
         )
 
     def _build_env(self) -> dict[str, str]:
         use_bedrock = os.environ.get("CLAUDE_CODE_USE_BEDROCK", "") == "1"
         env = {
+            "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY") or "not-used",
             "CLAUDE_CODE_OAUTH_TOKEN": os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", ""),
             "FORCE_AUTO_BACKGROUND_TASKS": "1",
             "ENABLE_BACKGROUND_TASKS": "1",
         }
         if use_bedrock:
             env["CLAUDE_CODE_USE_BEDROCK"] = "1"
-            env["ANTHROPIC_API_KEY"] = "not-used"
             for var in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
                         "AWS_SESSION_TOKEN", "AWS_PROFILE", "AWS_REGION",
                         "AWS_BEARER_TOKEN_BEDROCK"):
                 val = os.environ.get(var, "")
                 if val:
                     env[var] = val
-            # Fetch EC2 IAM credentials if not already set
             if "AWS_ACCESS_KEY_ID" not in env:
                 env.update(_get_ec2_credentials())
-        else:
-            env["ANTHROPIC_API_KEY"] = os.environ.get("ANTHROPIC_API_KEY") or ""
         return {k: v for k, v in env.items() if v is not None}
 
     def populate_context_post_run(self, context: AgentContext) -> None:
@@ -151,41 +162,44 @@ class ClaudeCodeAgent(BaseInstalledAgent):
     ) -> None:
         if self._system_prompt:
             instruction = self._system_prompt.strip() + "\n\n" + instruction
+
         escaped = shlex.quote(instruction)
         env = self._build_env()
-        # Merge _extra_env (from --ae flags) so Bedrock creds are available
         env.update(self._extra_env)
+
         # Set model via env var (same as built-in CC)
         if self.model_name:
-            use_bedrock = env.get("CLAUDE_CODE_USE_BEDROCK") == "1"
-            if use_bedrock and "/" in self.model_name:
+            if env.get("CLAUDE_CODE_USE_BEDROCK") == "1" and "/" in self.model_name:
                 env["ANTHROPIC_MODEL"] = self.model_name.split("/", 1)[-1]
             else:
                 env["ANTHROPIC_MODEL"] = self.model_name
-        from harbor.models.trial.paths import EnvironmentPaths
+
         env["CLAUDE_CONFIG_DIR"] = (EnvironmentPaths.agent_dir / "sessions").as_posix()
 
         cli_flags = self.build_cli_flags()
         extra = (cli_flags + " ") if cli_flags else ""
 
-        # Build env export string for su -c
-        env_exports = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
-
-        # Run as 'agent' user to avoid CC's root check
-        cmd = (
-            f"export {env_exports} PATH=/home/agent/.local/bin:/installed-agent/bin:$PATH; "
-            f"cd $(cat /installed-agent/workdir 2>/dev/null || echo /app) && "
-            f"mkdir -p $CLAUDE_CONFIG_DIR/debug $CLAUDE_CONFIG_DIR/projects/-app "
-            f"$CLAUDE_CONFIG_DIR/shell-snapshots $CLAUDE_CONFIG_DIR/statsig "
-            f"$CLAUDE_CONFIG_DIR/todos $CLAUDE_CONFIG_DIR/skills && "
-            f"claude --verbose --output-format=stream-json "
-            f"--permission-mode=bypassPermissions "
-            f"{extra}"
-            f"--print -- {escaped} 2>&1 </dev/null | tee "
-            f"/logs/agent/claude-code.txt"
+        # Setup config dirs (same as built-in)
+        await self.exec_as_agent(
+            environment,
+            command=(
+                "mkdir -p $CLAUDE_CONFIG_DIR/debug $CLAUDE_CONFIG_DIR/projects/-app "
+                "$CLAUDE_CONFIG_DIR/shell-snapshots $CLAUDE_CONFIG_DIR/statsig "
+                "$CLAUDE_CONFIG_DIR/todos $CLAUDE_CONFIG_DIR/skills"
+            ),
+            env=env,
         )
 
-        await self.exec_as_root(
+        # Run CC directly via exec_as_agent (same as built-in, no su)
+        await self.exec_as_agent(
             environment,
-            command=f"su - agent -c {shlex.quote(cmd)}",
+            command=(
+                'export PATH="$HOME/.local/bin:$PATH"; '
+                f"claude --verbose --output-format=stream-json "
+                f"--permission-mode=bypassPermissions "
+                f"{extra}"
+                f"--print -- {escaped} 2>&1 </dev/null | tee "
+                f"/logs/agent/claude-code.txt"
+            ),
+            env=env,
         )
