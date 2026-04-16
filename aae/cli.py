@@ -73,6 +73,10 @@ def _build_harbor_command(cfg: dict, jobs_dir: str) -> list[str]:
     for a in run_cfg.get("artifacts", []):
         cmd.extend(["--artifact", a])
 
+    # Timeout multiplier
+    if run_cfg.get("timeout_multiplier"):
+        cmd.extend(["--agent-timeout-multiplier", str(run_cfg["timeout_multiplier"])])
+
     return cmd
 
 
