@@ -31,9 +31,10 @@ class QoderCliAgent(BaseInstalledAgent):
     def name() -> str:
         return "qoder-cli"
 
-    def __init__(self, *args, system_prompt: str = "", **kwargs):
+    def __init__(self, *args, system_prompt: str = "", reasoning_effort: str = "", **kwargs):
         super().__init__(*args, **kwargs)
         self._system_prompt = system_prompt.replace("\\n", "\n")
+        self._reasoning_effort = reasoning_effort
 
     def get_version_command(self) -> str | None:
         return 'export PATH="/installed-agent/bin:$PATH"; qodercli --version'
@@ -63,16 +64,22 @@ class QoderCliAgent(BaseInstalledAgent):
         if self.model_name:
             model_flag = f" --model {shlex.quote(self.model_name)}"
 
+        # Qoder 1.0.14: --reasoning-effort <level>
+        effort_flag = ""
+        if self._reasoning_effort:
+            effort_flag = f" --reasoning-effort {shlex.quote(self._reasoning_effort)}"
+
         env = {}
         token = os.environ.get("QODER_PERSONAL_ACCESS_TOKEN", "")
         if token:
             env["QODER_PERSONAL_ACCESS_TOKEN"] = token
 
+        # Qoder 1.0.14: --yolo/-q removed, use --dangerously-skip-permissions
         await self.exec_as_agent(
             environment,
             command=(
                 'export PATH="/installed-agent/bin:$PATH"; '
-                f"qodercli -p {escaped} --yolo -q{model_flag}"
+                f"qodercli -p {escaped} --dangerously-skip-permissions{model_flag}{effort_flag}"
                 f" 2>&1 | tee /logs/agent/qodercli.txt"
             ),
             env=env,

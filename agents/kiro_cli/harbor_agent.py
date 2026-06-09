@@ -76,9 +76,11 @@ class KiroCliAgent(BaseInstalledAgent):
     def name() -> str:
         return "kiro-cli"
 
-    def __init__(self, *args, system_prompt: str = "", **kwargs):
+    def __init__(self, *args, system_prompt: str = "", effort: str = "", agent_engine: str = "", **kwargs):
         super().__init__(*args, **kwargs)
         self._system_prompt = system_prompt.replace("\\n", "\n")
+        self._effort = effort
+        self._agent_engine = agent_engine
 
     def get_version_command(self) -> str | None:
         return 'export PATH="/installed-agent/bin:$PATH"; kiro-cli-chat --version'
@@ -88,6 +90,18 @@ class KiroCliAgent(BaseInstalledAgent):
         bin_path = bin_dir / "kiro-cli-chat"
         if not bin_path.exists():
             raise FileNotFoundError(f"kiro-cli-chat not found in {bin_dir}")
+
+        # Install shared library dependencies for kiro-cli-chat 2.6+
+        await self.exec_as_root(
+            environment,
+            command=(
+                "if command -v apt-get &>/dev/null; then"
+                "  apt-get update -qq && apt-get install -y -qq libasound2 2>/dev/null || apt-get install -y -qq libasound2t64 2>/dev/null || true;"
+                " elif command -v apk &>/dev/null; then"
+                "  apk add --no-cache alsa-lib 2>/dev/null || true;"
+                " fi"
+            ),
+        )
 
         await self.exec_as_root(environment, "mkdir -p /installed-agent/bin")
         await environment.upload_file(str(bin_path), "/installed-agent/bin/kiro-cli-chat")
@@ -134,6 +148,16 @@ class KiroCliAgent(BaseInstalledAgent):
         if self.model_name:
             model_flag = f" --model {shlex.quote(self.model_name)}"
 
+        # Kiro 2.6.0: --effort <low|medium|high|xhigh|max>
+        effort_flag = ""
+        if self._effort:
+            effort_flag = f" --effort {shlex.quote(self._effort)}"
+
+        # Kiro 2.6.0: --agent-engine <v2|v1|kas>
+        engine_flag = ""
+        if self._agent_engine:
+            engine_flag = f" --agent-engine {shlex.quote(self._agent_engine)}"
+
         # Use --agent benchmark for 2.0+ (allows tools in non-interactive mode)
         agent_flag = ""
         agent_config = AGENT_DIR / "config" / "benchmark.json"
@@ -150,7 +174,7 @@ class KiroCliAgent(BaseInstalledAgent):
             command=(
                 'export PATH="/installed-agent/bin:$PATH"; '
                 f"kiro-cli-chat chat --no-interactive --trust-all-tools"
-                f" --wrap never{agent_flag}{model_flag} {escaped}"
+                f" --wrap never{agent_flag}{model_flag}{effort_flag}{engine_flag} {escaped}"
                 f" 2>&1 | tee /logs/agent/kiro-cli.txt"
             ),
             env=env,
