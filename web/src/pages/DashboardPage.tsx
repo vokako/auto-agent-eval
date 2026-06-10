@@ -122,7 +122,7 @@ export default function DashboardPage() {
             <td className="c mono">{j.errors || "—"}</td>
             <td className="c"><span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span></td>
             <td className="c dim">{j.total_task_time || "—"}</td>
-            <td className="c dim">{j.cost_usd ? `$${j.cost_usd.toFixed(2)}` : j.credits ? `${j.credits} cr` : "—"}</td>
+            <td className="c dim">{j.cost_usd ? `$${j.cost_usd.toFixed(2)}` : j.credits ? `$${(j.credits * 0.04).toFixed(2)}` : "—"}</td>
             <td className="c dim mono">{j.input_tokens || j.output_tokens ? `${(j.input_tokens/1000).toFixed(0)}k / ${(j.output_tokens/1000).toFixed(0)}k / ${((j.cache_read+j.cache_write)/1000).toFixed(0)}k` : "—"}</td>
             <td className="c">
               {j.status === "running" ? (
