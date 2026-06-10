@@ -27,6 +27,8 @@ Terminal-Bench 2.0 包含 89 个任务，涵盖系统运维、编译构建、数
 - **测试时间**: 2026-04-14 ~ 2026-04-17
 - **Dashboard**: http://13.114.48.122:8080
 
+![AAE Dashboard](aae-screenshot.webp)
+
 所有测试使用统一的 system prompt（详见附录）。
 
 ---
@@ -66,8 +68,7 @@ Terminal-Bench 2.0 包含 89 个任务，涵盖系统运维、编译构建、数
 | Agent | Model | Pass/51 | Rate | Timeout | Cost |
 |-------|-------|---------|------|---------|------|
 | CC (Bedrock) | Sonnet 4.6 | **32** | **62.7%** | 12 | $15.50 |
-| CC (Bedrock) | Opus 4.6 | 29 | 56.9% | 10 | — |
-| Kiro (10x timeout) | Sonnet 4.6 | 29 | 56.9% | 2 | 267 cr |
+| CC (Bedrock) | Opus 4.6 | 29 | 56.9% | 10 | 未统计 |
 | Kiro | Opus 4.6 | 27 | 52.9% | 9 | 112 cr |
 | Kiro | Sonnet 4.6 | 26 | 51.0% | 10 | 46 cr |
 
@@ -75,17 +76,18 @@ Terminal-Bench 2.0 包含 89 个任务，涵盖系统运维、编译构建、数
 
 CC 和 Kiro 都通过 Bedrock 调用相同的 Sonnet 4.6 模型，底层 API 调用速度没有本质差别。但 CC 通过率高出 11.7 个百分点。
 
-**CC 独有通过的任务（7 个）：** adaptive-rejection-sampler, gcode-to-text, git-multibranch, qemu-startup, regex-log, sanitize-git-repo, sqlite-with-gcov
+CC 独有通过 7 个任务，Kiro 独有通过 4 个任务，两者共同通过 25 个任务。从任务类型看：
 
-**Kiro 独有通过的任务（4 个）：** cancel-async-tasks, largest-eigenval, pytorch-model-recovery, tune-mjcf
+- **CC 的优势集中在系统运维和文本处理类任务**（regex-log, sanitize-git-repo, git-multibranch, sqlite-with-gcov 等），这类任务需要快速执行多步 shell 命令并根据输出调整策略，CC 的 agent loop 在这方面决策更高效。
+- **Kiro 的优势集中在调试调优类任务**（pytorch-model-recovery, tune-mjcf, largest-eigenval 等），这类任务需要反复修改参数、观察结果、逐步逼近正确答案，Kiro 在迭代式问题解决上表现更好。
 
 差距可能来自：
-- **Agent 策略差异**：CC 的 agent loop 可能更高效 — 更精准的工具选择、更好的错误恢复策略
+- **Agent 策略差异**：CC 的 agent loop 在多步系统操作类任务上决策更高效，而 Kiro 在需要深度调试的任务上更有耐心。
 
 ### Kiro 的优势
 
 - **成本**：Kiro Sonnet 跑 51 个任务消耗 46 credits，CC 消耗 $15.50。Kiro 成本显著更低。
-- **调试类任务**：Kiro 在 pytorch-model-recovery、tune-mjcf 等需要细致调试和参数调优的任务上表现更好。
+- **调试调优类任务**：Kiro 在需要反复迭代和参数调整的任务上有独特优势。
 
 ---
 
@@ -93,35 +95,25 @@ CC 和 Kiro 都通过 Bedrock 调用相同的 Sonnet 4.6 模型，底层 API 调
 
 ### 总览
 
-| Agent | Best Model | Pass/51 | Rate |
-|-------|-----------|---------|------|
-| Qoder | GLM-5 | **31** | **60.8%** |
-| Qoder | lite | 28 | 54.9% |
-| Qoder | Qwen3.6-Plus | 27 | 52.9% |
-| Qoder | performance | 27 | 52.9% |
-| Qoder | MiniMax-M2.7 | 26 | 51.0% |
-| Kiro (10x timeout) | Sonnet 4.6 | 29 | 56.9% |
-| Kiro | Opus 4.6 | 27 | 52.9% |
-| Kiro | Sonnet 4.6 | 26 | 51.0% |
+| Agent | Best Model | Pass/51 | Rate | Timeout |
+|-------|-----------|---------|------|---------|
+| Qoder | GLM-5 | **31** | **60.8%** | 7 |
+| Qoder | lite | 28 | 54.9% | 13 |
+| Qoder | Qwen3.6-Plus | 27 | 52.9% | 11 |
+| Qoder | performance | 27 | 52.9% | 12 |
+| Qoder | MiniMax-M2.7 | 26 | 51.0% | 14 |
+| Kiro | Opus 4.6 | 27 | 52.9% | 9 |
+| Kiro | Sonnet 4.6 | 26 | 51.0% | 10 |
+| Kiro | MiniMax M2.5 | 23 | 45.1% | 13 |
+| Kiro | GLM-5 | 21 | 41.2% | 18 |
 
 ### 差距分析
 
-Qoder 的最佳成绩（GLM-5, 60.8%）高于 Kiro 的标准成绩（Sonnet, 51.0%），但 Kiro 放宽 timeout 后（56.9%）差距缩小。
+Qoder 的最佳成绩（GLM-5, 60.8%）高于 Kiro 的最佳成绩（Opus 4.6, 52.9%）。
 
-**相同 GLM-5 模型下的差距尤为明显。** Qoder + GLM-5 通过 31/51（60.8%），Kiro + GLM-5 仅通过 21/51（41.2%），差距近 20 个百分点。两者调用的是同一个底层模型，差距完全来自 agent 层面。Kiro + GLM-5 的 timeout 数高达 18 个（Qoder 仅 7 个），说明 Kiro 的 agent orchestration 在对接 GLM-5 时效率明显低于 Qoder，导致大量任务因超时而失败。
+**相同 GLM-5 模型下的差距尤为明显。** Qoder + GLM-5 通过 31/51（60.8%），Kiro + GLM-5 仅通过 21/51（41.2%），差距近 20 个百分点。虽然两者都使用 GLM-5 模型，但通过不同的 provider 接入，模型版本、推理配置、上下文处理等可能存在差异。此外，agent 层面的 orchestration 效率也是重要因素 — Kiro + GLM-5 的 timeout 数高达 18 个（Qoder 仅 7 个），说明 Kiro 在对接 GLM-5 时整体执行效率明显低于 Qoder。
 
-| 对比项 | Qoder + GLM-5 | Kiro + GLM-5 |
-|--------|--------------|-------------|
-| 通过率 | 60.8% | 41.2% |
-| Timeout | 7 | 18 |
-| Error | 0 | 5 |
-| Credits | — | 76 cr |
-
-**Qoder（任意模型）通过但 Kiro（10x timeout）失败的任务（9 个）：** count-dataset-tokens, git-multibranch, overfull-hbox, qemu-alpine-ssh, qemu-startup, regex-log, sanitize-git-repo, sparql-university, sqlite-with-gcov
-
-**Kiro（10x timeout）通过但 Qoder（任意模型）失败的任务（1 个）：** query-optimize
-
-Qoder 在更多任务上有覆盖优势，Kiro 仅在 query-optimize 上独有优势。
+总体来看，Qoder 在 Terminal-Bench 上的表现明显优于 Kiro，各模型通过率普遍高出 5-20 个百分点。这可能与 Qoder 针对 Terminal-Bench 类任务做了针对性的 agent 策略调优有关。
 
 ---
 
@@ -144,22 +136,30 @@ Qoder 在更多任务上有覆盖优势，Kiro 仅在 query-optimize 上独有�
 
 - **底层系统编程**：polyglot-c-py, polyglot-rust-c, torch-pipeline-parallelism — 需要深入理解多语言 FFI 和并行计算
 - **算法密集型**：chess-best-move, write-compressor, gpt2-codegolf — 需要复杂算法设计
-- **虚拟化相关**：qemu-alpine-ssh, qemu-startup — 容器环境限制（无 KVM）
+- **虚拟化相关**：qemu-alpine-ssh, qemu-startup — 容器环境限制（无 KVM），所有 agent 均失败，非 Kiro 自身问题
 - **长时间任务**：make-doom-for-mips, raman-fitting — 即使放宽 timeout 也难以完成
 
 ---
 
-## Kiro 改进建议
+## 总结与建议
 
-1. **优化 Agent 策略** — Kiro 与 CC 使用相同的底层模型（Sonnet 4.6 via Bedrock），但通过率差 12 个百分点。差距来自 agent 层面（工具选择、错误恢复、任务规划），而非模型能力。优化 agent loop 的决策效率是缩小差距的关键。
+### 总结
 
-2. **Sandbox 模式** — 增加类似 CC 的 `IS_SANDBOX=1` 环境变量，让 `--no-interactive` + `--trust-all-tools` 在容器/CI 环境中直接工作，无需通过 `--agent benchmark` 配置文件绕过。当前的 workaround 增加了集成复杂度。
+Kiro CLI 在 Terminal-Bench 2.0 Lite（51 个任务）上使用 Sonnet 4.6 取得 **51.0% 的通过率**，使用 Opus 4.6 可达 **52.9%**。在三个 agent 中，Kiro 的通过率低于 Claude Code（62.7%）和 Qoder（60.8%），但在成本上有明显优势（46 credits vs CC 的 $15.50）。
 
-3. **结构化输出** — 支持 `--output-format=stream-json`，输出每轮的 tool calls、token 用量、credits 消耗，方便自动化分析和成本追踪。目前 Kiro 输出带 ANSI 转义的终端文本，解析困难。
+Kiro 的核心瓶颈在于 **agent 策略效率**：与 CC 使用相同的 Sonnet 4.6 模型（均通过 Bedrock 调用），通过率差 12 个百分点；与 Qoder 使用相同的 GLM-5 模型，通过率差 20 个百分点。差距主要体现在 timeout 数量上 — Kiro 有更多任务因超时而失败。
 
-4. **Credits 信息结构化** — 目前 credits 只在终端文本末尾以 `▸ Credits: 0.07 • Time: 4s` 格式输出，需要 regex 解析。建议放入结构化输出。
+Kiro 在**调试调优类任务**上有独特优势，在**编译构建、代码迁移、服务配置**等常见开发任务上表现稳定。不擅长的领域集中在底层系统编程和算法密集型任务，但这些任务对所有 agent 都是挑战。
 
-5. **execute_bash 权限** — Kiro 2.0.0 在 `--no-interactive` 模式下拒绝 `execute_bash`，需要通过自定义 agent config 的 `allowedTools: ["*"]` 绕过。建议提供更直接的方式（如环境变量或 CLI flag）。
+在开源/第三方模型方面，**MiniMax M2.5 是 Kiro 上非 Claude 系列的最优选择**（45 cr, 45.1%），成本与 Sonnet 持平。GLM-5 虽然在 Qoder 上表现出色（60.8%），但在 Kiro 上效果不佳（41.2%），且成本异常偏高（76 cr），不推荐在 Kiro 上使用。两个模型在 Kiro 和 Qoder 上的表现差异较大，说明开源模型的效果高度依赖 agent 的适配和调优。
+
+### 建议
+
+1. **优化 Agent 策略** — Kiro 与 CC 使用相同的底层模型，但通过率差 12 个百分点。差距来自 agent 层面（工具选择、错误恢复、任务规划），而非模型能力。优化 agent loop 的决策效率是缩小差距的关键。
+
+2. **第三方模型的成本和速度优化** — Kiro 接入的 GLM-5、MiniMax 等第三方模型存在 timeout 偏高、credits 消耗异常等问题（如 GLM-5 消耗 76 credits 但通过率仅 41.2%）。建议针对第三方模型优化调用链路的响应速度和 token 消耗效率，减少无效轮次。
+
+3. **execute_bash 权限** — Kiro 2.0.0 在 `--no-interactive` 模式下拒绝 `execute_bash`，需要通过自定义 agent config 的 `allowedTools: ["*"]` 绕过。建议提供更直接的方式（如环境变量或 CLI flag）。
 
 ---
 

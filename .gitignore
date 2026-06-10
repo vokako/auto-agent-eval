@@ -13,3 +13,4 @@ uv.lock
 agents/*/bin/
 datasets/
 jobs/
+.archive/

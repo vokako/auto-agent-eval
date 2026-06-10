@@ -170,6 +170,41 @@ def _sum_trial_durations(job_dir: Path) -> str:
     return f"{hours}h{mins:02d}m" if hours else f"{mins}m"
 
 
+    return f"{hours}h{mins:02d}m" if hours else f"{mins}m"
+
+
+def _sum_job_cost(job_dir: Path) -> dict:
+    """Sum cost across all trials. Returns {cost_usd: float, credits: float}."""
+    import re
+    cost_usd = 0.0
+    credits = 0.0
+    for d in job_dir.iterdir():
+        if not d.is_dir() or "__" not in d.name:
+            continue
+        agent_dir = d / "agent"
+        if not agent_dir.exists():
+            continue
+        for f in agent_dir.iterdir():
+            if not f.is_file() or f.suffix != ".txt":
+                continue
+            try:
+                text = f.read_text(errors="ignore")
+                for line in text.splitlines():
+                    if '"total_cost_usd"' in line:
+                        try:
+                            j2 = json.loads(line)
+                            if j2.get("type") == "result":
+                                cost_usd += j2.get("total_cost_usd", 0)
+                        except Exception:
+                            pass
+                for m in re.findall(r"Credits:\s*([\d.]+)", text):
+                    credits += float(m)
+            except Exception:
+                pass
+            break
+    return {"cost_usd": round(cost_usd, 4), "credits": round(credits, 2)}
+
+
 _jobs_cache: dict = {"data": None, "mtime": 0}
 
 
@@ -212,6 +247,7 @@ def list_jobs():
                 extra = _agent_extra(job_dir)
                 started = parsed.get("started_at")
                 finished = parsed.get("finished_at")
+                cost = _sum_job_cost(job_dir) if finished else {"cost_usd": 0, "credits": 0}
 
                 jobs.append({
                     "id": f"{config_dir.name}/{job_dir.name}",
@@ -230,6 +266,8 @@ def list_jobs():
                     "rate": round(passed / total * 100, 1) if total else 0,
                     "duration": _duration_str(started, finished),
                     "total_task_time": _sum_trial_durations(job_dir),
+                    "cost_usd": cost["cost_usd"],
+                    "credits": cost["credits"],
                     "finished": finished is not None,
                     "status": "done" if finished else "running",
                     "n_total": parsed.get("n_total", 0),

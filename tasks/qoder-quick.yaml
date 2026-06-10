@@ -1,9 +1,0 @@
-dataset: terminal-bench-core
-
-agent:
-  name: qoder_cli
-
-run:
-  concurrent: 1
-  tasks:
-    - hello-world
