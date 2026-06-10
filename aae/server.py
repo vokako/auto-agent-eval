@@ -174,10 +174,14 @@ def _sum_trial_durations(job_dir: Path) -> str:
 
 
 def _sum_job_cost(job_dir: Path) -> dict:
-    """Sum cost across all trials. Returns {cost_usd: float, credits: float}."""
+    """Sum cost across all trials. Returns cost_usd, credits, and token breakdown."""
     import re
     cost_usd = 0.0
     credits = 0.0
+    input_tokens = 0
+    output_tokens = 0
+    cache_read = 0
+    cache_write = 0
     for d in job_dir.iterdir():
         if not d.is_dir() or "__" not in d.name:
             continue
@@ -195,6 +199,11 @@ def _sum_job_cost(job_dir: Path) -> dict:
                             j2 = json.loads(line)
                             if j2.get("type") == "result":
                                 cost_usd += j2.get("total_cost_usd", 0)
+                                u = j2.get("usage", {})
+                                input_tokens += u.get("input_tokens", 0)
+                                output_tokens += u.get("output_tokens", 0)
+                                cache_read += u.get("cache_read_input_tokens", 0)
+                                cache_write += u.get("cache_creation_input_tokens", 0)
                         except Exception:
                             pass
                 for m in re.findall(r"Credits:\s*([\d.]+)", text):
@@ -202,7 +211,11 @@ def _sum_job_cost(job_dir: Path) -> dict:
             except Exception:
                 pass
             break
-    return {"cost_usd": round(cost_usd, 4), "credits": round(credits, 2)}
+    return {
+        "cost_usd": round(cost_usd, 4), "credits": round(credits, 2),
+        "input_tokens": input_tokens, "output_tokens": output_tokens,
+        "cache_read": cache_read, "cache_write": cache_write,
+    }
 
 
 _jobs_cache: dict = {"data": None, "mtime": 0}
@@ -268,6 +281,10 @@ def list_jobs():
                     "total_task_time": _sum_trial_durations(job_dir),
                     "cost_usd": cost["cost_usd"],
                     "credits": cost["credits"],
+                    "input_tokens": cost["input_tokens"],
+                    "output_tokens": cost["output_tokens"],
+                    "cache_read": cost["cache_read"],
+                    "cache_write": cost["cache_write"],
                     "finished": finished is not None,
                     "status": "done" if finished else "running",
                     "n_total": parsed.get("n_total", 0),
