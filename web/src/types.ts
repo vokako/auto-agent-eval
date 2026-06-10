@@ -17,6 +17,10 @@ export interface JobSummary {
   total_task_time: string;
   cost_usd: number;
   credits: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read: number;
+  cache_write: number;
   finished: boolean;
   status: string;
   n_total: number;
