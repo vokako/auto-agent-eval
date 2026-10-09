@@ -1,0 +1,14 @@
+# TB2-Fast30 on Bedrock AgentCore microVM; same image for every harness.
+backend: agentcore
+task_list: tb2-fast30.txt
+agentcore:
+  runner: ~/work/projects/agentcore-bench-runner
+  tasks_dir: ~/work/pocs/2026-09-28-agentcore-bench-runner/tb2
+  mode: microvm
+  image: 236995464743.dkr.ecr.us-east-2.amazonaws.com/bench/{task}:arm64
+  config: config.json
+  jobs: 5
+agent:
+  name: codex
+  model: global.openai.gpt-6.1-sol
+  effort: high

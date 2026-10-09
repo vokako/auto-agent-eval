@@ -85,6 +85,15 @@ def cmd_run(args):
     agent_cfg = cfg.get("agent", {})
 
     jobs_dir = str(PROJECT_ROOT / "jobs" / args.task)
+    if cfg.get("backend") == "agentcore":
+        from aae import agentcore
+        print(f"Running: {args.task} (AgentCore {cfg['agentcore'].get('mode', 'microvm')})")
+        print(f"  agent:   {agent_cfg.get('name')} / {agent_cfg.get('model')} / effort {agent_cfg.get('effort', 'default')}")
+        job_dir = agentcore.run(cfg, _load_task_list(cfg["task_list"]), Path(jobs_dir))
+        import shutil
+        shutil.copy2(PROJECT_ROOT / "tasks" / f"{args.task}.yaml", job_dir / "task.yaml")
+        print(f"  results: {job_dir}")
+        return
     cmd = _build_harbor_command(cfg, jobs_dir)
 
     print(f"Running: {args.task}")
