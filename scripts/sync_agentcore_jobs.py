@@ -9,6 +9,7 @@ for cost; unfinished ones show up as errors until the next sync.
 """
 import argparse
 import glob
+import re
 import json
 import os
 import shutil
@@ -33,7 +34,9 @@ def main():
     groups: dict[str, dict[str, Path]] = {}
     for rd in sorted(glob.glob(str(runner / "runs" / "*"))):
         name = os.path.basename(rd)
-        if name.endswith("-r1") or name in SKIP or not os.path.exists(f"{rd}/results.jsonl"):
+        # *-retryN / *-lostN hold re-runs that retry_throttled.py merges into the parent run.
+        if (name.endswith("-r1") or re.search(r"-(retry|lost)\d+$", name) or name in SKIP
+                or not os.path.exists(f"{rd}/results.jsonl")):
             continue
         subset, cfg = name.split("-", 1)
         if subset not in SUBSETS:
