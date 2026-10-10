@@ -265,3 +265,5 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 .legend-item { display: flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
 .legend-item:hover { background: var(--surface2); }
 .legend-item.off { opacity: 0.35; }
+.chart-pair { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 16px; }
+.score-chart-title { font-size: 13px; font-weight: 600; margin: 0 0 6px 4px; color: var(--text); }

@@ -124,7 +124,7 @@ export default function DashboardPage() {
         <div className="header-actions">
           <input className="search" placeholder="Search config / agent / model…" value={search} onChange={e => setSearch(e.target.value)} />
           <ColumnPicker columns={COLUMNS} hidden={hidden} onChange={setHidden} />
-          <button className="btn-ghost" onClick={() => navigate("/effort")}>Effort chart</button>
+          <button className="btn-ghost" onClick={() => navigate("/effort")}>Score charts</button>
           {selected.size >= 2 && <button className="btn-primary" onClick={() => navigate(`/compare?ids=${[...selected].join(",")}`)}>Compare {selected.size}</button>}
           {selected.size > 0 && <button className="btn-ghost" onClick={() => setSelected(new Set())}>Deselect</button>}
           <a href="https://github.com/vokako/auto-agent-eval" target="_blank" rel="noopener" className="github-link" title="GitHub">
