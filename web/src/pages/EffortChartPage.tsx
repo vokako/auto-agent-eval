@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type EffortPoint, type EffortSeries } from "../lib/api";
 import { useFetch } from "../hooks/useFetch";
 
@@ -18,7 +18,7 @@ const score = (p: EffortPoint) => p.tasks ? (p.passed / p.tasks) * 100 : 0;
 interface XAxis { key: "cost" | "time"; label: string; value: (p: EffortPoint) => number; fmt: (v: number) => string }
 const X_AXES: XAxis[] = [
   { key: "cost", label: "Total cost (USD)", value: p => p.cost_usd, fmt: v => v >= 10 ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}` },
-  { key: "time", label: "Total agent time (min)", value: p => p.agent_s / 60, fmt: v => `${v.toFixed(0)}m` },
+  { key: "time", label: "Avg agent time per task (min)", value: p => p.tasks ? p.agent_s / 60 / p.tasks : 0, fmt: v => v < 10 ? `${v.toFixed(1)}m` : `${v.toFixed(0)}m` },
 ];
 
 function Marker({ kind, x, y, color }: { kind: typeof MARKERS[number]; x: number; y: number; color: string }) {
@@ -90,7 +90,7 @@ function ScoreChart({ axis, series, styleOf, logX, efforts, onOpen }: {
                       `${s.agent} · ${shortModel(s.model)} · ${p.effort}`,
                       `score ${score(p).toFixed(1)}%  (${p.passed}/${p.tasks})`,
                       `cost $${p.cost_usd.toFixed(2)}${p.credits ? `  (${p.credits.toFixed(1)} credits)` : ""}`,
-                      `agent time ${(p.agent_s / 60).toFixed(0)} min`,
+                      `avg agent time ${p.tasks ? (p.agent_s / 60 / p.tasks).toFixed(1) : "0"} min/task`,
                     ] })}>
                     <Marker kind={st.marker} x={x} y={y} color={st.color} />
                     <text x={x + 7} y={y - 6} fill={st.color} fontSize={10}>{EFFORT_ABBR[p.effort] || p.effort}</text>
@@ -118,15 +118,34 @@ function ScoreChart({ axis, series, styleOf, logX, efforts, onOpen }: {
 
 export default function EffortChartPage() {
   const navigate = useNavigate();
-  const { data, loading } = useFetch(() => api.effortCurves(), []);
+  const [params] = useSearchParams();
+  const ids = useMemo(() => new Set((params.get("ids") || "").split(",").filter(Boolean)), [params]);
+  const { data: raw, loading } = useFetch(() => api.effortCurves(), []);
   const [subset, setSubset] = useState<string>("");
   const [logCost, setLogCost] = useState(true);
   const [logTime, setLogTime] = useState(false);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
+  // Keep only the points (and series) belonging to the jobs ticked on the Jobs page.
+  const data = useMemo(() => raw && {
+    ...raw,
+    series: raw.series.map(s => ({ ...s, points: s.points.filter(p => ids.has(p.job)) })).filter(s => s.points.length),
+  }, [raw, ids]);
   const subsets = useMemo(() => [...new Set((data?.series || []).map(s => s.subset))].sort(), [data]);
-  const cur = subset || subsets[0] || "";
+  const cur = subsets.includes(subset) ? subset : subsets[0] || "";
   if (loading || !data) return <div className="loading">Loading…</div>;
+  if (!ids.size || !data.series.length) return (
+    <>
+      <header>
+        <h1 onClick={() => navigate("/")}>🧪 AAE — Agent Auto Eval</h1>
+        <div className="header-actions"><button className="btn-ghost" onClick={() => navigate("/")}>← Jobs</button></div>
+      </header>
+      <div className="loading">
+        {ids.size ? "None of the selected jobs have per-task-set results to plot (only AgentCore jobs do)." : "No jobs selected."}{" "}
+        Tick jobs on the <a href="/" onClick={e => { e.preventDefault(); navigate("/"); }} style={{ color: "var(--blue)" }}>Jobs page</a>, then press Chart.
+      </div>
+    </>
+  );
 
   const all = data.series.filter(s => s.subset === cur);
   const agents = [...new Set(all.map(s => s.agent))].sort();

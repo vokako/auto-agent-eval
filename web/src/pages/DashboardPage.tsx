@@ -71,7 +71,10 @@ export default function DashboardPage() {
   const [sortKey, setSortKey] = useState("date");
   const [sortAsc, setSortAsc] = useState(false);
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(sessionStorage.getItem("aae.dashboard.selected") || "[]")); } catch { return new Set(); }
+  });
+  useEffect(() => { sessionStorage.setItem("aae.dashboard.selected", JSON.stringify([...selected])); }, [selected]);
   const [facets, setFacets] = useState<Record<string, Set<string>>>({});
   const [ranges, setRanges] = useState<Record<string, NumRange>>({});
   const [hidden, setHidden] = useState<Set<string>>(() => {
@@ -124,7 +127,11 @@ export default function DashboardPage() {
         <div className="header-actions">
           <input className="search" placeholder="Search config / agent / model…" value={search} onChange={e => setSearch(e.target.value)} />
           <ColumnPicker columns={COLUMNS} hidden={hidden} onChange={setHidden} />
-          <button className="btn-ghost" onClick={() => navigate("/effort")}>Score charts</button>
+          <button className={selected.size ? "btn-primary" : "btn-ghost"} disabled={!selected.size}
+            title={selected.size ? "Plot the selected jobs" : "Tick jobs in the table first"}
+            onClick={() => navigate(`/effort?ids=${encodeURIComponent([...selected].join(","))}`)}>
+            Chart{selected.size ? ` ${selected.size}` : ""}
+          </button>
           {selected.size >= 2 && <button className="btn-primary" onClick={() => navigate(`/compare?ids=${[...selected].join(",")}`)}>Compare {selected.size}</button>}
           {selected.size > 0 && <button className="btn-ghost" onClick={() => setSelected(new Set())}>Deselect</button>}
           <a href="https://github.com/vokako/auto-agent-eval" target="_blank" rel="noopener" className="github-link" title="GitHub">
@@ -145,7 +152,11 @@ export default function DashboardPage() {
       )}
       <table className="jobs-table">
         <thead><tr>
-          <th style={{ width: 32 }}></th>
+          <th style={{ width: 32 }}>
+            <input type="checkbox" title="Select all visible rows"
+              checked={sorted.length > 0 && sorted.every(j => selected.has(j.id))}
+              onChange={e => { const n = new Set(selected); sorted.forEach(j => e.target.checked ? n.add(j.id) : n.delete(j.id)); setSelected(n); }} />
+          </th>
           {cols.map(c => (
             <th key={c.id} className={`sort${c.center ? " c" : ""}`} title={c.title} onClick={() => toggleSort(c)}>
               {c.label}{arrow(c.id)}
