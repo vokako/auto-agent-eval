@@ -81,6 +81,21 @@ def _read_agent_info(job_dir: Path) -> tuple[str, str]:
     return "", ""
 
 
+def _read_run_cfg(job_dir: Path) -> dict:
+    """effort / mode / adapter from config.json (written by the AgentCore backend; empty for Harbor jobs)."""
+    out = {"effort": "", "mode": "", "adapter": ""}
+    try:
+        cfg = json.load(open(job_dir / "config.json"))
+        a = (cfg.get("agents") or [{}])[0]
+        out["effort"] = a.get("effort") or ""
+        out["mode"] = a.get("mode") or ""
+        if cfg.get("backend") == "agentcore":
+            out["adapter"] = f'agentcore {out["mode"]}'.strip()
+    except Exception:
+        pass
+    return out
+
+
 def _agent_extra(job_dir: Path) -> dict:
     """Get builtin/custom flag, agent version, and dataset from config + first trial log."""
     info = {"builtin": False, "version": "", "dataset": ""}
@@ -258,6 +273,7 @@ def list_jobs():
                 verified = total - sum(1 for t in tasks.values() if t.get("error_type") and not t["passed"] and t["reward"] == 0.0 and "reward" not in t.get("error_type", "").lower())
                 agent_name, model_name = _read_agent_info(job_dir)
                 extra = _agent_extra(job_dir)
+                run_cfg = _read_run_cfg(job_dir)
                 started = parsed.get("started_at")
                 finished = parsed.get("finished_at")
                 cost = _sum_job_cost(job_dir) if finished else {"cost_usd": 0, "credits": 0}
@@ -268,7 +284,9 @@ def list_jobs():
                     "started_at": started,
                     "agent": agent_name,
                     "model": model_name,
-                    "adapter": "built-in" if extra["builtin"] else "custom",
+                    "effort": run_cfg["effort"],
+                    "mode": run_cfg["mode"],
+                    "adapter": run_cfg["adapter"] or ("built-in" if extra["builtin"] else "custom"),
                     "version": extra["version"],
                     "dataset": extra["dataset"],
                     "passed": passed,

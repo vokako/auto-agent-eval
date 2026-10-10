@@ -4,6 +4,8 @@ export interface JobSummary {
   started_at: string;
   agent: string;
   model: string;
+  effort: string;
+  mode: string;
   adapter: string;
   version: string;
   dataset: string;

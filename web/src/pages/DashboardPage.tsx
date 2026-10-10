@@ -5,8 +5,24 @@ import { fmtTime, rateClass } from "../lib/format";
 import { AdapterTag } from "../components/AdapterTag";
 import { ColumnFilter, ColumnRangeFilter } from "../components/ColumnFilter";
 import { useFetch } from "../hooks/useFetch";
+import type { JobSummary } from "../types";
 
-type SortKey = "config" | "agent" | "passed" | "rate" | "errors" | "total" | "started_at";
+type SortKey = "config" | "agent" | "model" | "effort" | "dataset" | "passed" | "rate" | "errors" | "total" | "cost_usd" | "started_at";
+type FacetKey = "config" | "agent" | "model" | "effort" | "adapter" | "dataset";
+
+const FACETS: { key: FacetKey; label: string }[] = [
+  { key: "config", label: "Config" }, { key: "agent", label: "Agent" }, { key: "model", label: "Model" },
+  { key: "effort", label: "Effort" }, { key: "adapter", label: "Adapter" }, { key: "dataset", label: "Dataset" },
+];
+
+const facetVal = (j: JobSummary, k: FacetKey): string => {
+  const v = (j as any)[k] as string | undefined;
+  if (k === "dataset") return v ? v.split("/").pop()! : "—";
+  return v || "—";
+};
+
+// Compact token count: 564, 72k, 15.9M
+const fmtTok = (n: number) => !n ? "0" : n < 1000 ? String(n) : n < 1e6 ? `${(n / 1e3).toFixed(0)}k` : `${(n / 1e6).toFixed(1)}M`;
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -15,43 +31,47 @@ export default function DashboardPage() {
   const [sortAsc, setSortAsc] = useState(false);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  const [fConfig, setFConfig] = useState<Set<string>>(new Set());
-  const [fAgent, setFAgent] = useState<Set<string>>(new Set());
-  const [fAdapter, setFAdapter] = useState<Set<string>>(new Set());
+  const [filters, setFilters] = useState<Record<FacetKey, Set<string>>>(
+    () => Object.fromEntries(FACETS.map(f => [f.key, new Set<string>()])) as Record<FacetKey, Set<string>>);
   const [fMinTasks, setFMinTasks] = useState(0);
   const [fMinRate, setFMinRate] = useState(0);
 
   if (loading || !jobs) return <div className="loading">Loading…</div>;
 
-  const configs = [...new Set(jobs.map(j => j.config))].sort();
-  const agents = [...new Set(jobs.map(j => j.agent || "—"))].sort();
-  const adapters = [...new Set(jobs.map(j => j.adapter))].sort();
+  const values = (k: FacetKey) => [...new Set(jobs.map(j => facetVal(j, k)))].sort();
+  const setFacet = (k: FacetKey) => (s: Set<string>) => setFilters({ ...filters, [k]: s });
+  const anyFacet = FACETS.some(f => filters[f.key].size > 0);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);
-    else { setSortKey(key); setSortAsc(key === "config" || key === "agent"); }
+    else { setSortKey(key); setSortAsc(["config", "agent", "model", "effort", "dataset"].includes(key)); }
   };
   const arrow = (key: SortKey) => sortKey === key ? (sortAsc ? " ↑" : " ↓") : "";
+  const q = search.toLowerCase();
 
   const sorted = [...jobs]
-    .filter(j => !search || j.config.includes(search) || j.agent.toLowerCase().includes(search.toLowerCase()))
-    .filter(j => fConfig.size === 0 || fConfig.has(j.config))
-    .filter(j => fAgent.size === 0 || fAgent.has(j.agent || "—"))
-    .filter(j => fAdapter.size === 0 || fAdapter.has(j.adapter))
+    .filter(j => !q || [j.config, j.agent, j.model, j.effort].some(v => (v || "").toLowerCase().includes(q)))
+    .filter(j => FACETS.every(f => filters[f.key].size === 0 || filters[f.key].has(facetVal(j, f.key))))
     .filter(j => j.total >= fMinTasks)
     .filter(j => j.rate >= fMinRate)
     .sort((a, b) => {
-      const va = (a as any)[sortKey], vb = (b as any)[sortKey];
+      const va = (a as any)[sortKey] ?? "", vb = (b as any)[sortKey] ?? "";
       return (sortAsc ? 1 : -1) * (va < vb ? -1 : va > vb ? 1 : 0);
     });
+
+  const facetTh = (k: FacetKey, label: string, sortable = true) => (
+    <th className={sortable ? "sort" : ""} onClick={sortable ? () => toggleSort(k as SortKey) : undefined}>
+      {label}{sortable ? arrow(k as SortKey) : ""}
+      <ColumnFilter values={values(k)} selected={filters[k]} onChange={setFacet(k)} />
+    </th>
+  );
 
   return (
     <>
       <header>
         <h1 onClick={() => navigate("/")}>🧪 AAE — Agent Auto Eval</h1>
         <div className="header-actions">
-          <input className="search" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="search" placeholder="Search config / agent / model…" value={search} onChange={e => setSearch(e.target.value)} />
           {selected.size >= 2 && <button className="btn-primary" onClick={() => navigate(`/compare?ids=${[...selected].join(",")}`)}>Compare {selected.size}</button>}
           {selected.size > 0 && <button className="btn-ghost" onClick={() => setSelected(new Set())}>Deselect</button>}
           <a href="https://github.com/vokako/auto-agent-eval" target="_blank" rel="noopener" className="github-link" title="GitHub">
@@ -64,32 +84,24 @@ export default function DashboardPage() {
         <span>·</span>
         <span>{sorted.reduce((s, j) => s + j.total, 0)} tasks</span>
       </div>
-      {(fConfig.size > 0 || fAgent.size > 0 || fAdapter.size > 0 || fMinTasks > 0 || fMinRate > 0) && (
+      {(anyFacet || fMinTasks > 0 || fMinRate > 0) && (
         <div className="active-filters">
-          {[...fConfig].map(v => <span key={`c-${v}`} className="filter-tag" onClick={() => { const n = new Set(fConfig); n.delete(v); setFConfig(n); }}>Config: {v} ✕</span>)}
-          {[...fAgent].map(v => <span key={`a-${v}`} className="filter-tag" onClick={() => { const n = new Set(fAgent); n.delete(v); setFAgent(n); }}>Agent: {v} ✕</span>)}
-          {[...fAdapter].map(v => <span key={`d-${v}`} className="filter-tag" onClick={() => { const n = new Set(fAdapter); n.delete(v); setFAdapter(n); }}>Adapter: {v} ✕</span>)}
+          {FACETS.flatMap(f => [...filters[f.key]].map(v =>
+            <span key={`${f.key}-${v}`} className="filter-tag" onClick={() => { const n = new Set(filters[f.key]); n.delete(v); setFacet(f.key)(n); }}>{f.label}: {v} ✕</span>))}
           {fMinTasks > 0 && <span className="filter-tag" onClick={() => setFMinTasks(0)}>Tasks ≥ {fMinTasks} ✕</span>}
           {fMinRate > 0 && <span className="filter-tag" onClick={() => setFMinRate(0)}>Rate ≥ {fMinRate}% ✕</span>}
-          <button className="filter-clear" onClick={() => { setFConfig(new Set()); setFAgent(new Set()); setFAdapter(new Set()); setFMinTasks(0); setFMinRate(0); }}>Clear all</button>
+          <button className="filter-clear" onClick={() => { setFilters(Object.fromEntries(FACETS.map(f => [f.key, new Set<string>()])) as Record<FacetKey, Set<string>>); setFMinTasks(0); setFMinRate(0); }}>Clear all</button>
         </div>
       )}
       <table className="jobs-table">
         <thead><tr>
           <th style={{ width: 32 }}></th>
-          <th className="sort" onClick={() => toggleSort("config")}>
-            Config{arrow("config")}
-            <ColumnFilter values={configs} selected={fConfig} onChange={setFConfig} />
-          </th>
-          <th className="sort" onClick={() => toggleSort("agent")}>
-            Agent{arrow("agent")}
-            <ColumnFilter values={agents} selected={fAgent} onChange={setFAgent} />
-          </th>
-          <th>
-            Adapter
-            <ColumnFilter values={adapters} selected={fAdapter} onChange={setFAdapter} />
-          </th>
-          <th>Dataset</th>
+          {facetTh("config", "Config")}
+          {facetTh("agent", "Agent")}
+          {facetTh("model", "Model")}
+          {facetTh("effort", "Effort")}
+          {facetTh("adapter", "Adapter", false)}
+          {facetTh("dataset", "Dataset")}
           <th className="sort c" onClick={() => toggleSort("total")}>
             Tasks{arrow("total")}
             <ColumnRangeFilter value={fMinTasks} max={100} onChange={setFMinTasks} />
@@ -103,8 +115,8 @@ export default function DashboardPage() {
             <ColumnRangeFilter value={fMinRate} max={100} onChange={setFMinRate} suffix="%" />
           </th>
           <th className="c">Σ Task</th>
-          <th className="c">Cost</th>
-          <th className="c">Tokens (in/out/cache)</th>
+          <th className="sort c" onClick={() => toggleSort("cost_usd")}>Cost{arrow("cost_usd")}</th>
+          <th className="c" title="input = uncached input tokens">Tokens in / out / cache R / cache W</th>
           <th className="c">Status</th>
           <th className="sort c" onClick={() => toggleSort("started_at")}>Date{arrow("started_at")}</th>
         </tr></thead>
@@ -112,9 +124,11 @@ export default function DashboardPage() {
           <tr key={j.id} className="row" onClick={() => navigate(`/jobs/${j.id}`)}>
             <td><label onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.has(j.id)} onChange={() => { const n = new Set(selected); n.has(j.id) ? n.delete(j.id) : n.add(j.id); setSelected(n); }} /></label></td>
             <td className="bold">{j.config}</td>
-            <td className="dim">{j.agent || "—"} <span className="muted">/ {j.model || "?"}</span></td>
+            <td className="dim">{j.agent || "—"}</td>
+            <td className="dim mono">{j.model || "—"}</td>
+            <td className="dim">{j.effort || "—"}</td>
             <td><AdapterTag adapter={j.adapter} version={j.version} /></td>
-            <td className="dim">{j.dataset ? j.dataset.split("/").pop() : "—"}</td>
+            <td className="dim">{facetVal(j, "dataset")}</td>
             <td className="c mono">{j.total}</td>
             <td className="c mono">{j.passed}</td>
             <td className="c mono">{j.failed - j.timeouts - j.errors > 0 ? j.failed - j.timeouts - j.errors : "—"}</td>
@@ -123,7 +137,9 @@ export default function DashboardPage() {
             <td className="c"><span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span></td>
             <td className="c dim">{j.total_task_time || "—"}</td>
             <td className="c dim">{j.cost_usd ? `$${j.cost_usd.toFixed(2)}` : j.credits ? `$${(j.credits * 0.02).toFixed(2)}` : "—"}</td>
-            <td className="c dim mono">{j.input_tokens || j.output_tokens ? `${(j.input_tokens/1000).toFixed(0)}k / ${(j.output_tokens/1000).toFixed(0)}k / ${((j.cache_read+j.cache_write)/1000).toFixed(0)}k` : "—"}</td>
+            <td className="c dim mono">{j.input_tokens || j.output_tokens
+              ? `${fmtTok(j.input_tokens)} / ${fmtTok(j.output_tokens)} / ${fmtTok(j.cache_read)} / ${fmtTok(j.cache_write)}`
+              : j.credits ? `${j.credits.toFixed(1)} credits` : "—"}</td>
             <td className="c">
               {j.status === "running" ? (
                 <span className="status-running">● {j.progress}/{j.n_total}</span>

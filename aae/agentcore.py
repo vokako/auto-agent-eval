@@ -75,15 +75,22 @@ def run(cfg: dict, task_names: list[str], jobs_dir: Path) -> Path:
 
 
 def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
-            started: datetime, finished: datetime) -> None:
-    """Write Harbor-style result.json plus one <task>__<run_id>/ dir per trial."""
+            started: datetime, finished: datetime, dataset: str = "") -> None:
+    """Write Harbor-style result.json plus one <task>__<run_id>/ dir per trial.
+
+    results_jsonl may be one path or a list (e.g. Fast30 + Hard20 merged into one job).
+    """
     rewards: dict[str, list[str]] = {}
     exceptions: dict[str, list[str]] = {}
-    for line in open(results_jsonl):
+    files = results_jsonl if isinstance(results_jsonl, (list, tuple)) else [results_jsonl]
+    first_summary: dict = {}
+    for line in (l for f in files for l in open(f)):
         if not line.strip():
             continue
         r = json.loads(line)
         s = r.get("summary") if isinstance(r.get("summary"), dict) else None
+        if s and not first_summary:
+            first_summary = s
         tid = f'{r["task"]}__{r.get("run_id", "none")}'
         d = out / tid
         (d / "agent").mkdir(parents=True, exist_ok=True)
@@ -103,8 +110,11 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
             per = (pricing.get("kiro-credit") or {}).get("usd_per_credit", 0.02)
             lines.append(json.dumps({"type": "result", "total_cost_usd": round(u["credits"] * per, 6), "usage": {}}))
         else:
+            inp = u.get("input_tokens") or 0
+            if harness == "codex":  # Codex input includes cached tokens; store uncached, like Claude Code
+                inp = max(inp - (u.get("cache_read_tokens") or 0), 0)
             lines.append(json.dumps({"type": "result", "total_cost_usd": _price(pricing, s.get("model"), u, harness) or 0,
-                                     "usage": {"input_tokens": u.get("input_tokens") or 0,
+                                     "usage": {"input_tokens": inp,
                                                "output_tokens": u.get("output_tokens") or 0,
                                                "cache_read_input_tokens": u.get("cache_read_tokens") or 0,
                                                "cache_creation_input_tokens": u.get("cache_write_tokens") or 0}}))
@@ -121,3 +131,11 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
     json.dump({"started_at": started.isoformat(), "finished_at": finished.isoformat(),
                "stats": {"evals": {name: {"reward_stats": {"reward": rewards}, "exception_stats": exceptions}}}},
               open(out / "result.json", "w"), indent=2)
+    fs = first_summary
+    json.dump({"backend": "agentcore",
+               "agents": [{"name": fs.get("harness") or agent.get("name"),
+                           "model_name": fs.get("model") or agent.get("model"),
+                           "effort": (fs.get("usage") or {}).get("effort") or fs.get("effort") or agent.get("effort"),
+                           "mode": fs.get("mode")}],
+               "datasets": [{"name": dataset}] if dataset else []},
+              open(out / "config.json", "w"), indent=2)
