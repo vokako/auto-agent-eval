@@ -36,6 +36,26 @@ def _expand(p: str) -> Path:
     return Path(os.path.expanduser(p))
 
 
+# Runs before 2026-10-10 did not record the installed harness version. Each trial installs the latest
+# release at submit time, so it is inferred from release timestamps (npm `time` for Claude Code / Codex,
+# Last-Modified of desktop-release.q.us-east-1.amazonaws.com/<ver>/ for Kiro CLI). Shown with a "~" prefix.
+_RELEASES = {
+    "claude-code": [("2026-10-08T03:42:57Z", "2.1.294"), ("2026-10-08T18:22:58Z", "2.1.295"), ("2026-10-09T16:58:10Z", "2.1.296")],
+    "codex": [("2026-10-08T19:01:18Z", "0.162.0"), ("2026-10-09T19:50:30Z", "0.162.1")],
+    "kiro-cli": [("2026-10-06T14:22:28Z", "2.28.0"), ("2026-10-09T17:28:14Z", "2.29.0")],
+}
+
+
+def _inferred_version(harness: str | None, submitted: str | None) -> str:
+    if not harness or not submitted:
+        return ""
+    v = ""
+    for ts, ver in _RELEASES.get(harness, []):
+        if submitted >= ts:
+            v = ver
+    return f"~{v}" if v else ""
+
+
 def _price(pricing: dict, model: str, usage: dict, harness: str) -> float | None:
     p = pricing.get(model)
     if not p or p.get("input") is None:
@@ -78,19 +98,28 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
             started: datetime, finished: datetime, dataset: str = "") -> None:
     """Write Harbor-style result.json plus one <task>__<run_id>/ dir per trial.
 
-    results_jsonl may be one path or a list (e.g. Fast30 + Hard20 merged into one job).
+    results_jsonl may be one path, a list of paths, or a list of (subset_label, path) pairs
+    (e.g. [("fast30", ...), ("hard20", ...)] merged into one job). Per-subset totals go to config.json.
     """
     rewards: dict[str, list[str]] = {}
     exceptions: dict[str, list[str]] = {}
     files = results_jsonl if isinstance(results_jsonl, (list, tuple)) else [results_jsonl]
+    files = [f if isinstance(f, tuple) else ("", f) for f in files]
     first_summary: dict = {}
-    for line in (l for f in files for l in open(f)):
+    versions_seen: set[str] = set()
+    subsets: dict[str, dict] = {}
+    for subset, line in ((lab, l) for lab, f in files for l in open(f)):
         if not line.strip():
             continue
         r = json.loads(line)
         s = r.get("summary") if isinstance(r.get("summary"), dict) else None
+        st = subsets.setdefault(subset or "all", {"tasks": 0, "passed": 0, "cost_usd": 0.0, "credits": 0.0, "agent_s": 0.0})
+        st["tasks"] += 1
         if s and not first_summary:
             first_summary = s
+        if s:
+            versions_seen.add(s.get("harness_version") or r.get("harness_version")
+                              or _inferred_version(s.get("harness") or r.get("harness"), r.get("submitted")))
         tid = f'{r["task"]}__{r.get("run_id", "none")}'
         d = out / tid
         (d / "agent").mkdir(parents=True, exist_ok=True)
@@ -108,17 +137,23 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
         if u.get("credits") is not None:
             lines.append(f'Credits: {u["credits"]}')
             per = (pricing.get("kiro-credit") or {}).get("usd_per_credit", 0.02)
-            lines.append(json.dumps({"type": "result", "total_cost_usd": round(u["credits"] * per, 6), "usage": {}}))
+            trial_cost = round(u["credits"] * per, 6)
+            st["credits"] += u["credits"]
+            lines.append(json.dumps({"type": "result", "total_cost_usd": trial_cost, "usage": {}}))
         else:
             inp = u.get("input_tokens") or 0
             if harness == "codex":  # Codex input includes cached tokens; store uncached, like Claude Code
                 inp = max(inp - (u.get("cache_read_tokens") or 0), 0)
-            lines.append(json.dumps({"type": "result", "total_cost_usd": _price(pricing, s.get("model"), u, harness) or 0,
+            trial_cost = _price(pricing, s.get("model"), u, harness) or 0
+            lines.append(json.dumps({"type": "result", "total_cost_usd": trial_cost,
                                      "usage": {"input_tokens": inp,
                                                "output_tokens": u.get("output_tokens") or 0,
                                                "cache_read_input_tokens": u.get("cache_read_tokens") or 0,
                                                "cache_creation_input_tokens": u.get("cache_write_tokens") or 0}}))
         (d / "agent" / "agent.txt").write_text("\n".join(lines) + "\n")
+        st["cost_usd"] += trial_cost
+        st["passed"] += 1 if s.get("reward") == 1 else 0
+        st["agent_s"] += (s.get("timings_s") or {}).get("agent") or 0
         fin = datetime.fromisoformat(s["finished"].replace("Z", "+00:00"))
         total = (s.get("timings_s") or {}).get("total") or 0
         json.dump({"task_name": r["task"], "trial_name": tid, "reward": s.get("reward"),
@@ -132,10 +167,14 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
                "stats": {"evals": {name: {"reward_stats": {"reward": rewards}, "exception_stats": exceptions}}}},
               open(out / "result.json", "w"), indent=2)
     fs = first_summary
+    versions = sorted({v for v in versions_seen if v})
     json.dump({"backend": "agentcore",
                "agents": [{"name": fs.get("harness") or agent.get("name"),
                            "model_name": fs.get("model") or agent.get("model"),
+                           "version": ", ".join(versions),
                            "effort": (fs.get("usage") or {}).get("effort") or fs.get("effort") or agent.get("effort"),
                            "mode": fs.get("mode")}],
-               "datasets": [{"name": dataset}] if dataset else []},
+               "datasets": [{"name": dataset}] if dataset else [],
+               "subsets": {k: {**v, "cost_usd": round(v["cost_usd"], 4), "credits": round(v["credits"], 2),
+                               "agent_s": round(v["agent_s"])} for k, v in subsets.items()}},
               open(out / "config.json", "w"), indent=2)

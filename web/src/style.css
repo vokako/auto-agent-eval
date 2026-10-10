@@ -252,3 +252,16 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+
+/* Effort chart */
+.chart-controls { display: flex; align-items: center; gap: 18px; margin: 12px 0 16px; font-size: 12px; color: var(--dim); }
+.chart-controls label { display: flex; align-items: center; gap: 6px; }
+.chart-controls select { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; }
+.chart-controls .chk input { accent-color: var(--blue); }
+.chart-wrap { display: flex; gap: 20px; align-items: flex-start; }
+.effort-chart { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.chart-legend { width: 220px; display: flex; flex-direction: column; gap: 14px; font-size: 12px; }
+.legend-agent { font-weight: 600; margin-bottom: 4px; }
+.legend-item { display: flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+.legend-item:hover { background: var(--surface2); }
+.legend-item.off { opacity: 0.35; }

@@ -83,12 +83,13 @@ def _read_agent_info(job_dir: Path) -> tuple[str, str]:
 
 def _read_run_cfg(job_dir: Path) -> dict:
     """effort / mode / adapter from config.json (written by the AgentCore backend; empty for Harbor jobs)."""
-    out = {"effort": "", "mode": "", "adapter": ""}
+    out = {"effort": "", "mode": "", "adapter": "", "version": ""}
     try:
         cfg = json.load(open(job_dir / "config.json"))
         a = (cfg.get("agents") or [{}])[0]
         out["effort"] = a.get("effort") or ""
         out["mode"] = a.get("mode") or ""
+        out["version"] = a.get("version") or ""
         if cfg.get("backend") == "agentcore":
             out["adapter"] = f'agentcore {out["mode"]}'.strip()
     except Exception:
@@ -287,7 +288,7 @@ def list_jobs():
                     "effort": run_cfg["effort"],
                     "mode": run_cfg["mode"],
                     "adapter": run_cfg["adapter"] or ("built-in" if extra["builtin"] else "custom"),
-                    "version": extra["version"],
+                    "version": run_cfg["version"] or extra["version"],
                     "dataset": extra["dataset"],
                     "passed": passed,
                     "failed": total - passed,
@@ -316,6 +317,38 @@ def list_jobs():
 
 
 CACHE_DIR = PROJECT_ROOT / "jobs" / ".cache"
+
+
+_EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
+
+@app.get("/api/effort-curves")
+def effort_curves():
+    """Per (agent, model, task subset): cost / pass / agent time at each effort level.
+
+    Reads per-subset totals from AgentCore jobs' config.json, so Fast30 and Hard20 stay separate
+    even when one job merges both. Jobs without subsets (Harbor runs) are skipped.
+    """
+    series: dict[tuple, dict] = {}
+    if JOBS_DIR.exists():
+        for config_dir in sorted(JOBS_DIR.iterdir()):
+            if not config_dir.is_dir() or config_dir.name.startswith("."):
+                continue
+            for job_dir in config_dir.iterdir():
+                try:
+                    cfg = json.load(open(job_dir / "config.json"))
+                except Exception:
+                    continue
+                a = (cfg.get("agents") or [{}])[0]
+                effort = a.get("effort") or ""
+                for subset, st in (cfg.get("subsets") or {}).items():
+                    key = (a.get("name") or "", a.get("model_name") or "", subset)
+                    s = series.setdefault(key, {"agent": key[0], "model": key[1], "subset": subset,
+                                                "version": a.get("version") or "", "points": []})
+                    s["points"].append({"effort": effort, "job": f"{config_dir.name}/{job_dir.name}", **st})
+    for s in series.values():
+        s["points"].sort(key=lambda p: _EFFORT_ORDER.index(p["effort"]) if p["effort"] in _EFFORT_ORDER else 99)
+    return {"efforts": _EFFORT_ORDER, "series": sorted(series.values(), key=lambda s: (s["subset"], s["agent"], s["model"]))}
 
 
 def _get_cached_job(job_dir: Path) -> dict | None:

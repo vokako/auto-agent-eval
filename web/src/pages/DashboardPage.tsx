@@ -38,7 +38,8 @@ const COLUMNS: Col[] = [
   { id: "agent", label: "Agent", filter: "facet", value: text("agent"), render: j => j.agent || "—", cls: "dim" },
   { id: "model", label: "Model", filter: "facet", value: text("model"), render: j => j.model || "—", cls: "dim mono" },
   { id: "effort", label: "Effort", filter: "facet", value: text("effort"), render: j => j.effort || "—", cls: "dim" },
-  { id: "adapter", label: "Adapter", filter: "facet", value: text("adapter"), render: j => <AdapterTag adapter={j.adapter} version={j.version} /> },
+  { id: "version", label: "Version", title: "Harness version; ~ = inferred from release date", filter: "facet", value: text("version"), render: j => j.version || "—", cls: "dim mono" },
+  { id: "adapter", label: "Adapter", filter: "facet", value: text("adapter"), render: j => <AdapterTag adapter={j.adapter} /> },
   { id: "dataset", label: "Dataset", filter: "facet", value: j => j.dataset ? j.dataset.split("/").pop()! : "—", render: j => j.dataset ? j.dataset.split("/").pop() : "—", cls: "dim" },
   { id: "total", label: "Tasks", center: true, filter: "range", value: j => j.total, render: j => j.total, cls: "mono" },
   { id: "passed", label: "Pass", center: true, filter: "range", value: j => j.passed, render: j => j.passed, cls: "mono" },
@@ -61,8 +62,8 @@ const COLUMNS: Col[] = [
 // Facet value shown in the filter list (Date filters by day, not timestamp).
 const facetOf = (c: Col, j: JobSummary) => c.id === "date" ? day(j.started_at) : String(c.value(j));
 
-const HIDDEN_KEY = "aae.dashboard.hiddenColumns";
-const DEFAULT_HIDDEN = ["credits", "tok_cw"];
+const HIDDEN_KEY = "aae.dashboard.hiddenColumns.v2";
+const DEFAULT_HIDDEN = ["tok_cw"];
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -123,6 +124,7 @@ export default function DashboardPage() {
         <div className="header-actions">
           <input className="search" placeholder="Search config / agent / model…" value={search} onChange={e => setSearch(e.target.value)} />
           <ColumnPicker columns={COLUMNS} hidden={hidden} onChange={setHidden} />
+          <button className="btn-ghost" onClick={() => navigate("/effort")}>Effort chart</button>
           {selected.size >= 2 && <button className="btn-primary" onClick={() => navigate(`/compare?ids=${[...selected].join(",")}`)}>Compare {selected.size}</button>}
           {selected.size > 0 && <button className="btn-ghost" onClick={() => setSelected(new Set())}>Deselect</button>}
           <a href="https://github.com/vokako/auto-agent-eval" target="_blank" rel="noopener" className="github-link" title="GitHub">
