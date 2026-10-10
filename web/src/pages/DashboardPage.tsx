@@ -1,70 +1,120 @@
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { fmtTime, rateClass } from "../lib/format";
 import { AdapterTag } from "../components/AdapterTag";
-import { ColumnFilter, ColumnRangeFilter } from "../components/ColumnFilter";
+import { ColumnFilter, ColumnPicker, NumRangeFilter, type NumRange } from "../components/ColumnFilter";
 import { useFetch } from "../hooks/useFetch";
 import type { JobSummary } from "../types";
 
-type SortKey = "config" | "agent" | "model" | "effort" | "dataset" | "passed" | "rate" | "errors" | "total" | "cost_usd" | "started_at";
-type FacetKey = "config" | "agent" | "model" | "effort" | "adapter" | "dataset";
-
-const FACETS: { key: FacetKey; label: string }[] = [
-  { key: "config", label: "Config" }, { key: "agent", label: "Agent" }, { key: "model", label: "Model" },
-  { key: "effort", label: "Effort" }, { key: "adapter", label: "Adapter" }, { key: "dataset", label: "Dataset" },
-];
-
-const facetVal = (j: JobSummary, k: FacetKey): string => {
-  const v = (j as any)[k] as string | undefined;
-  if (k === "dataset") return v ? v.split("/").pop()! : "—";
-  return v || "—";
-};
-
 // Compact token count: 564, 72k, 15.9M
 const fmtTok = (n: number) => !n ? "0" : n < 1000 ? String(n) : n < 1e6 ? `${(n / 1e3).toFixed(0)}k` : `${(n / 1e6).toFixed(1)}M`;
+// "1h50m" / "25m" / "45s" -> minutes
+const durMin = (s: string) => {
+  if (!s) return 0;
+  const g = (re: RegExp) => Number((s.match(re) || [0, 0])[1]);
+  return g(/(\d+)h/) * 60 + g(/(\d+)m/) + g(/(\d+)s/) / 60;
+};
+const cost = (j: JobSummary) => j.cost_usd || j.credits * 0.02;
+const plainFail = (j: JobSummary) => Math.max(j.failed - j.timeouts - j.errors, 0);
+const day = (ts: string) => ts ? new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
+
+interface Col {
+  id: string;
+  label: string;
+  title?: string;
+  center?: boolean;
+  filter: "facet" | "range";
+  unit?: string;
+  value: (j: JobSummary) => string | number;   // used for sort and filter
+  render: (j: JobSummary) => ReactNode;
+  cls?: string;
+}
+
+const text = (k: keyof JobSummary) => (j: JobSummary) => (j[k] as string) || "—";
+
+const COLUMNS: Col[] = [
+  { id: "config", label: "Config", filter: "facet", value: text("config"), render: j => j.config, cls: "bold" },
+  { id: "agent", label: "Agent", filter: "facet", value: text("agent"), render: j => j.agent || "—", cls: "dim" },
+  { id: "model", label: "Model", filter: "facet", value: text("model"), render: j => j.model || "—", cls: "dim mono" },
+  { id: "effort", label: "Effort", filter: "facet", value: text("effort"), render: j => j.effort || "—", cls: "dim" },
+  { id: "adapter", label: "Adapter", filter: "facet", value: text("adapter"), render: j => <AdapterTag adapter={j.adapter} version={j.version} /> },
+  { id: "dataset", label: "Dataset", filter: "facet", value: j => j.dataset ? j.dataset.split("/").pop()! : "—", render: j => j.dataset ? j.dataset.split("/").pop() : "—", cls: "dim" },
+  { id: "total", label: "Tasks", center: true, filter: "range", value: j => j.total, render: j => j.total, cls: "mono" },
+  { id: "passed", label: "Pass", center: true, filter: "range", value: j => j.passed, render: j => j.passed, cls: "mono" },
+  { id: "fail", label: "Fail", center: true, filter: "range", value: plainFail, render: j => plainFail(j) || "—", cls: "mono" },
+  { id: "timeouts", label: "Timeout", center: true, filter: "range", value: j => j.timeouts, render: j => j.timeouts || "—", cls: "mono" },
+  { id: "errors", label: "Error", center: true, filter: "range", value: j => j.errors, render: j => j.errors || "—", cls: "mono" },
+  { id: "rate", label: "Rate", center: true, filter: "range", unit: "%", value: j => j.rate, render: j => <span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span> },
+  { id: "task_time", label: "Σ Task", center: true, filter: "range", unit: "min", value: j => Math.round(durMin(j.total_task_time)), render: j => j.total_task_time || "—", cls: "dim" },
+  { id: "cost", label: "Cost", center: true, filter: "range", unit: "$", value: cost, render: j => cost(j) ? `$${cost(j).toFixed(2)}` : "—", cls: "dim" },
+  { id: "credits", label: "Credits", center: true, filter: "range", value: j => j.credits, render: j => j.credits ? j.credits.toFixed(1) : "—", cls: "dim mono" },
+  { id: "tok_in", label: "In tok", title: "Uncached input tokens", center: true, filter: "range", value: j => j.input_tokens, render: j => j.input_tokens || j.output_tokens ? fmtTok(j.input_tokens) : "—", cls: "dim mono" },
+  { id: "tok_out", label: "Out tok", center: true, filter: "range", value: j => j.output_tokens, render: j => j.output_tokens ? fmtTok(j.output_tokens) : "—", cls: "dim mono" },
+  { id: "tok_cr", label: "Cache R", title: "Cache-read tokens", center: true, filter: "range", value: j => j.cache_read, render: j => j.cache_read ? fmtTok(j.cache_read) : "—", cls: "dim mono" },
+  { id: "tok_cw", label: "Cache W", title: "Cache-write tokens", center: true, filter: "range", value: j => j.cache_write, render: j => j.cache_write ? fmtTok(j.cache_write) : "—", cls: "dim mono" },
+  { id: "status", label: "Status", center: true, filter: "facet", value: j => j.status,
+    render: j => j.status === "running" ? <span className="status-running">● {j.progress}/{j.n_total}</span> : <span className="status-done">✓</span> },
+  { id: "date", label: "Date", center: true, filter: "facet", value: j => j.started_at || "", render: j => fmtTime(j.started_at), cls: "dim" },
+];
+
+// Facet value shown in the filter list (Date filters by day, not timestamp).
+const facetOf = (c: Col, j: JobSummary) => c.id === "date" ? day(j.started_at) : String(c.value(j));
+
+const HIDDEN_KEY = "aae.dashboard.hiddenColumns";
+const DEFAULT_HIDDEN = ["credits", "tok_cw"];
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { data: jobs, loading } = useFetch(() => api.jobs(), []);
-  const [sortKey, setSortKey] = useState<SortKey>("started_at");
+  const [sortKey, setSortKey] = useState("date");
   const [sortAsc, setSortAsc] = useState(false);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [filters, setFilters] = useState<Record<FacetKey, Set<string>>>(
-    () => Object.fromEntries(FACETS.map(f => [f.key, new Set<string>()])) as Record<FacetKey, Set<string>>);
-  const [fMinTasks, setFMinTasks] = useState(0);
-  const [fMinRate, setFMinRate] = useState(0);
+  const [facets, setFacets] = useState<Record<string, Set<string>>>({});
+  const [ranges, setRanges] = useState<Record<string, NumRange>>({});
+  const [hidden, setHidden] = useState<Set<string>>(() => {
+    try { const v = localStorage.getItem(HIDDEN_KEY); return new Set(v ? JSON.parse(v) : DEFAULT_HIDDEN); }
+    catch { return new Set(DEFAULT_HIDDEN); }
+  });
+  useEffect(() => { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hidden])); }, [hidden]);
 
   if (loading || !jobs) return <div className="loading">Loading…</div>;
 
-  const values = (k: FacetKey) => [...new Set(jobs.map(j => facetVal(j, k)))].sort();
-  const setFacet = (k: FacetKey) => (s: Set<string>) => setFilters({ ...filters, [k]: s });
-  const anyFacet = FACETS.some(f => filters[f.key].size > 0);
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else { setSortKey(key); setSortAsc(["config", "agent", "model", "effort", "dataset"].includes(key)); }
+  const cols = COLUMNS.filter(c => !hidden.has(c.id));
+  const facetValues = (c: Col) => {
+    const vals = [...new Set(jobs.map(j => facetOf(c, j)))];
+    return c.id === "date" ? vals : vals.sort();
   };
-  const arrow = (key: SortKey) => sortKey === key ? (sortAsc ? " ↑" : " ↓") : "";
+  const toggleSort = (c: Col) => {
+    if (sortKey === c.id) setSortAsc(!sortAsc);
+    else { setSortKey(c.id); setSortAsc(c.filter === "facet" && c.id !== "date"); }
+  };
+  const arrow = (id: string) => sortKey === id ? (sortAsc ? " ↑" : " ↓") : "";
   const q = search.toLowerCase();
+  const sortCol = COLUMNS.find(c => c.id === sortKey) || COLUMNS[0];
 
+  const inRange = (v: number, r?: NumRange) => !r || ((r.min === undefined || v >= r.min) && (r.max === undefined || v <= r.max));
   const sorted = [...jobs]
-    .filter(j => !q || [j.config, j.agent, j.model, j.effort].some(v => (v || "").toLowerCase().includes(q)))
-    .filter(j => FACETS.every(f => filters[f.key].size === 0 || filters[f.key].has(facetVal(j, f.key))))
-    .filter(j => j.total >= fMinTasks)
-    .filter(j => j.rate >= fMinRate)
+    .filter(j => !q || [j.config, j.agent, j.model, j.effort, j.dataset].some(v => (v || "").toLowerCase().includes(q)))
+    .filter(j => COLUMNS.every(c => c.filter === "facet"
+      ? !facets[c.id]?.size || facets[c.id].has(facetOf(c, j))
+      : inRange(Number(c.value(j)), ranges[c.id])))
     .sort((a, b) => {
-      const va = (a as any)[sortKey] ?? "", vb = (b as any)[sortKey] ?? "";
+      const va = sortCol.value(a), vb = sortCol.value(b);
       return (sortAsc ? 1 : -1) * (va < vb ? -1 : va > vb ? 1 : 0);
     });
 
-  const facetTh = (k: FacetKey, label: string, sortable = true) => (
-    <th className={sortable ? "sort" : ""} onClick={sortable ? () => toggleSort(k as SortKey) : undefined}>
-      {label}{sortable ? arrow(k as SortKey) : ""}
-      <ColumnFilter values={values(k)} selected={filters[k]} onChange={setFacet(k)} />
-    </th>
-  );
+  const activeTags: { key: string; label: string; clear: () => void }[] = [];
+  for (const c of COLUMNS) {
+    for (const v of facets[c.id] || []) activeTags.push({ key: `${c.id}-${v}`, label: `${c.label}: ${v}`, clear: () => { const n = new Set(facets[c.id]); n.delete(v); setFacets({ ...facets, [c.id]: n }); } });
+    const r = ranges[c.id];
+    if (r && (r.min !== undefined || r.max !== undefined)) {
+      const u = c.unit ? ` ${c.unit}` : "";
+      const label = r.min !== undefined && r.max !== undefined ? `${r.min}–${r.max}${u}` : r.min !== undefined ? `≥ ${r.min}${u}` : `≤ ${r.max}${u}`;
+      activeTags.push({ key: `${c.id}-range`, label: `${c.label} ${label}`, clear: () => { const n = { ...ranges }; delete n[c.id]; setRanges(n); } });
+    }
+  }
 
   return (
     <>
@@ -72,6 +122,7 @@ export default function DashboardPage() {
         <h1 onClick={() => navigate("/")}>🧪 AAE — Agent Auto Eval</h1>
         <div className="header-actions">
           <input className="search" placeholder="Search config / agent / model…" value={search} onChange={e => setSearch(e.target.value)} />
+          <ColumnPicker columns={COLUMNS} hidden={hidden} onChange={setHidden} />
           {selected.size >= 2 && <button className="btn-primary" onClick={() => navigate(`/compare?ids=${[...selected].join(",")}`)}>Compare {selected.size}</button>}
           {selected.size > 0 && <button className="btn-ghost" onClick={() => setSelected(new Set())}>Deselect</button>}
           <a href="https://github.com/vokako/auto-agent-eval" target="_blank" rel="noopener" className="github-link" title="GitHub">
@@ -84,70 +135,28 @@ export default function DashboardPage() {
         <span>·</span>
         <span>{sorted.reduce((s, j) => s + j.total, 0)} tasks</span>
       </div>
-      {(anyFacet || fMinTasks > 0 || fMinRate > 0) && (
+      {activeTags.length > 0 && (
         <div className="active-filters">
-          {FACETS.flatMap(f => [...filters[f.key]].map(v =>
-            <span key={`${f.key}-${v}`} className="filter-tag" onClick={() => { const n = new Set(filters[f.key]); n.delete(v); setFacet(f.key)(n); }}>{f.label}: {v} ✕</span>))}
-          {fMinTasks > 0 && <span className="filter-tag" onClick={() => setFMinTasks(0)}>Tasks ≥ {fMinTasks} ✕</span>}
-          {fMinRate > 0 && <span className="filter-tag" onClick={() => setFMinRate(0)}>Rate ≥ {fMinRate}% ✕</span>}
-          <button className="filter-clear" onClick={() => { setFilters(Object.fromEntries(FACETS.map(f => [f.key, new Set<string>()])) as Record<FacetKey, Set<string>>); setFMinTasks(0); setFMinRate(0); }}>Clear all</button>
+          {activeTags.map(t => <span key={t.key} className="filter-tag" onClick={t.clear}>{t.label} ✕</span>)}
+          <button className="filter-clear" onClick={() => { setFacets({}); setRanges({}); }}>Clear all</button>
         </div>
       )}
       <table className="jobs-table">
         <thead><tr>
           <th style={{ width: 32 }}></th>
-          {facetTh("config", "Config")}
-          {facetTh("agent", "Agent")}
-          {facetTh("model", "Model")}
-          {facetTh("effort", "Effort")}
-          {facetTh("adapter", "Adapter", false)}
-          {facetTh("dataset", "Dataset")}
-          <th className="sort c" onClick={() => toggleSort("total")}>
-            Tasks{arrow("total")}
-            <ColumnRangeFilter value={fMinTasks} max={100} onChange={setFMinTasks} />
-          </th>
-          <th className="sort c" onClick={() => toggleSort("passed")}>Pass{arrow("passed")}</th>
-          <th className="c">Fail</th>
-          <th className="c">Timeout</th>
-          <th className="c">Error</th>
-          <th className="sort c" onClick={() => toggleSort("rate")}>
-            Rate{arrow("rate")}
-            <ColumnRangeFilter value={fMinRate} max={100} onChange={setFMinRate} suffix="%" />
-          </th>
-          <th className="c">Σ Task</th>
-          <th className="sort c" onClick={() => toggleSort("cost_usd")}>Cost{arrow("cost_usd")}</th>
-          <th className="c" title="input = uncached input tokens">Tokens in / out / cache R / cache W</th>
-          <th className="c">Status</th>
-          <th className="sort c" onClick={() => toggleSort("started_at")}>Date{arrow("started_at")}</th>
+          {cols.map(c => (
+            <th key={c.id} className={`sort${c.center ? " c" : ""}`} title={c.title} onClick={() => toggleSort(c)}>
+              {c.label}{arrow(c.id)}
+              {c.filter === "facet"
+                ? <ColumnFilter values={facetValues(c)} selected={facets[c.id] || new Set()} onChange={s => setFacets({ ...facets, [c.id]: s })} />
+                : <NumRangeFilter value={ranges[c.id] || {}} unit={c.unit} onChange={r => setRanges({ ...ranges, [c.id]: r })} />}
+            </th>
+          ))}
         </tr></thead>
         <tbody>{sorted.map(j => (
           <tr key={j.id} className="row" onClick={() => navigate(`/jobs/${j.id}`)}>
             <td><label onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.has(j.id)} onChange={() => { const n = new Set(selected); n.has(j.id) ? n.delete(j.id) : n.add(j.id); setSelected(n); }} /></label></td>
-            <td className="bold">{j.config}</td>
-            <td className="dim">{j.agent || "—"}</td>
-            <td className="dim mono">{j.model || "—"}</td>
-            <td className="dim">{j.effort || "—"}</td>
-            <td><AdapterTag adapter={j.adapter} version={j.version} /></td>
-            <td className="dim">{facetVal(j, "dataset")}</td>
-            <td className="c mono">{j.total}</td>
-            <td className="c mono">{j.passed}</td>
-            <td className="c mono">{j.failed - j.timeouts - j.errors > 0 ? j.failed - j.timeouts - j.errors : "—"}</td>
-            <td className="c mono">{j.timeouts || "—"}</td>
-            <td className="c mono">{j.errors || "—"}</td>
-            <td className="c"><span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span></td>
-            <td className="c dim">{j.total_task_time || "—"}</td>
-            <td className="c dim">{j.cost_usd ? `$${j.cost_usd.toFixed(2)}` : j.credits ? `$${(j.credits * 0.02).toFixed(2)}` : "—"}</td>
-            <td className="c dim mono">{j.input_tokens || j.output_tokens
-              ? `${fmtTok(j.input_tokens)} / ${fmtTok(j.output_tokens)} / ${fmtTok(j.cache_read)} / ${fmtTok(j.cache_write)}`
-              : j.credits ? `${j.credits.toFixed(1)} credits` : "—"}</td>
-            <td className="c">
-              {j.status === "running" ? (
-                <span className="status-running">● {j.progress}/{j.n_total}</span>
-              ) : (
-                <span className="status-done">✓</span>
-              )}
-            </td>
-            <td className="c dim">{fmtTime(j.started_at)}</td>
+            {cols.map(c => <td key={c.id} className={`${c.center ? "c " : ""}${c.cls || ""}`}>{c.render(j)}</td>)}
           </tr>
         ))}</tbody>
       </table>

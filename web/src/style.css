@@ -62,6 +62,9 @@ h1:hover { color: var(--blue); }
 .col-filter-range { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); }
 .col-filter-range input[type="range"] { flex: 1; accent-color: var(--blue); }
 .col-filter-range button { background: none; border: none; color: var(--blue); cursor: pointer; font-size: 11px; }
+.col-filter-minmax { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
+.col-filter-minmax input { width: 72px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; color: var(--text); padding: 3px 6px; font-size: 12px; }
+.col-picker { margin-left: 0; }
 
 /* Pills & Tags */
 .pill { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.2px; }
