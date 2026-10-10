@@ -5,6 +5,7 @@ import { fmtTime, rateClass } from "../lib/format";
 import { AdapterTag } from "../components/AdapterTag";
 import { ColumnFilter, ColumnPicker, NumRangeFilter, type NumRange } from "../components/ColumnFilter";
 import { useFetch } from "../hooks/useFetch";
+import { usePersisted, setMapCodec } from "../hooks/usePersisted";
 import type { JobSummary } from "../types";
 
 // Compact token count: 564, 72k, 15.9M
@@ -68,15 +69,15 @@ const DEFAULT_HIDDEN = ["tok_cw"];
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { data: jobs, loading } = useFetch(() => api.jobs(), []);
-  const [sortKey, setSortKey] = useState("date");
-  const [sortAsc, setSortAsc] = useState(false);
-  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = usePersisted("aae.dashboard.sortKey", "date");
+  const [sortAsc, setSortAsc] = usePersisted("aae.dashboard.sortAsc", false);
+  const [search, setSearch] = usePersisted("aae.dashboard.search", "");
   const [selected, setSelected] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(sessionStorage.getItem("aae.dashboard.selected") || "[]")); } catch { return new Set(); }
   });
   useEffect(() => { sessionStorage.setItem("aae.dashboard.selected", JSON.stringify([...selected])); }, [selected]);
-  const [facets, setFacets] = useState<Record<string, Set<string>>>({});
-  const [ranges, setRanges] = useState<Record<string, NumRange>>({});
+  const [facets, setFacets] = usePersisted<Record<string, Set<string>>>("aae.dashboard.facets", {}, setMapCodec.encode, setMapCodec.decode);
+  const [ranges, setRanges] = usePersisted<Record<string, NumRange>>("aae.dashboard.ranges", {});
   const [hidden, setHidden] = useState<Set<string>>(() => {
     try { const v = localStorage.getItem(HIDDEN_KEY); return new Set(v ? JSON.parse(v) : DEFAULT_HIDDEN); }
     catch { return new Set(DEFAULT_HIDDEN); }

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type EffortPoint, type EffortSeries } from "../lib/api";
 import { useFetch } from "../hooks/useFetch";
+import { usePersisted, setCodec } from "../hooks/usePersisted";
 
 // One colour per agent (harness); models of the same agent share it and differ by dash + marker.
 const AGENT_COLORS: Record<string, string> = {
@@ -121,10 +122,10 @@ export default function EffortChartPage() {
   const [params] = useSearchParams();
   const ids = useMemo(() => new Set((params.get("ids") || "").split(",").filter(Boolean)), [params]);
   const { data: raw, loading } = useFetch(() => api.effortCurves(), []);
-  const [subset, setSubset] = useState<string>("");
-  const [logCost, setLogCost] = useState(true);
-  const [logTime, setLogTime] = useState(false);
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [subset, setSubset] = usePersisted<string>("aae.chart.subset", "");
+  const [logCost, setLogCost] = usePersisted("aae.chart.logCost", true);
+  const [logTime, setLogTime] = usePersisted("aae.chart.logTime", false);
+  const [hidden, setHidden] = usePersisted<Set<string>>("aae.chart.hidden", new Set(), setCodec.encode, setCodec.decode);
 
   // Keep only the points (and series) belonging to the jobs ticked on the Jobs page.
   const data = useMemo(() => raw && {
