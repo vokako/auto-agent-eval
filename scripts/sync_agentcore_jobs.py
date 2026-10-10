@@ -18,7 +18,7 @@ from pathlib import Path
 
 from aae.agentcore import convert
 
-SKIP = {"fast30-codex-gpt61sol-high"}  # in-region Mantle route, superseded by the global run
+SKIP = {"fast30-codex-gpt61sol-mantle-high"}  # in-region Mantle route, superseded by the global run
 SUBSETS = ("fast30", "hard20")
 
 
