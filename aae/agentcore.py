@@ -100,6 +100,8 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
         lines = [f'# harness={harness} model={s.get("model")} effort={u.get("effort", agent.get("effort", ""))}']
         if u.get("credits") is not None:
             lines.append(f'Credits: {u["credits"]}')
+            per = (pricing.get("kiro-credit") or {}).get("usd_per_credit", 0.02)
+            lines.append(json.dumps({"type": "result", "total_cost_usd": round(u["credits"] * per, 6), "usage": {}}))
         else:
             lines.append(json.dumps({"type": "result", "total_cost_usd": _price(pricing, s.get("model"), u, harness) or 0,
                                      "usage": {"input_tokens": u.get("input_tokens") or 0,
