@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { AppHeader } from "../components/AppHeader";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { fmtTime, rateClass } from "../lib/format";
@@ -17,6 +18,8 @@ const durMin = (s: string) => {
   return g(/(\d+)h/) * 60 + g(/(\d+)m/) + g(/(\d+)s/) / 60;
 };
 const cost = (j: JobSummary) => j.cost_usd || j.credits * 0.02;
+const avgMin = (j: JobSummary) => j.agent_s && j.total ? j.agent_s / 60 / j.total : 0;
+const shortModel = (m: string) => m.replace(/^(global|us|eu|apac)\./, "").replace(/^(anthropic|openai)\./, "");
 const plainFail = (j: JobSummary) => Math.max(j.failed - j.timeouts - j.errors, 0);
 const day = (ts: string) => ts ? new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
 
@@ -35,13 +38,13 @@ interface Col {
 const text = (k: keyof JobSummary) => (j: JobSummary) => (j[k] as string) || "—";
 
 const COLUMNS: Col[] = [
-  { id: "config", label: "Config", filter: "facet", value: text("config"), render: j => j.config, cls: "bold" },
+  { id: "config", label: "Config", filter: "facet", value: text("config"), render: j => j.config, cls: "bold nowrap" },
   { id: "agent", label: "Agent", filter: "facet", value: text("agent"), render: j => j.agent || "—", cls: "dim" },
-  { id: "model", label: "Model", filter: "facet", value: text("model"), render: j => j.model || "—", cls: "dim mono" },
+  { id: "model", label: "Model", filter: "facet", value: text("model"), render: j => j.model ? <span title={j.model}>{shortModel(j.model)}</span> : "—", cls: "dim mono nowrap" },
   { id: "effort", label: "Effort", filter: "facet", value: text("effort"), render: j => j.effort || "—", cls: "dim" },
-  { id: "version", label: "Version", title: "Harness version; ~ = inferred from release date", filter: "facet", value: text("version"), render: j => j.version || "—", cls: "dim mono" },
+  { id: "version", label: "Version", title: "Harness (agent CLI) version", filter: "facet", value: text("version"), render: j => j.version || "—", cls: "dim mono" },
   { id: "adapter", label: "Adapter", filter: "facet", value: text("adapter"), render: j => <AdapterTag adapter={j.adapter} /> },
-  { id: "dataset", label: "Dataset", filter: "facet", value: j => j.dataset ? j.dataset.split("/").pop()! : "—", render: j => j.dataset ? j.dataset.split("/").pop() : "—", cls: "dim" },
+  { id: "dataset", label: "Dataset", filter: "facet", value: j => j.dataset ? j.dataset.split("/").pop()! : "—", render: j => j.dataset ? j.dataset.split("/").pop() : "—", cls: "dim nowrap" },
   { id: "total", label: "Tasks", center: true, filter: "range", value: j => j.total, render: j => j.total, cls: "mono" },
   { id: "passed", label: "Pass", center: true, filter: "range", value: j => j.passed, render: j => j.passed, cls: "mono" },
   { id: "fail", label: "Fail", center: true, filter: "range", value: plainFail, render: j => plainFail(j) || "—", cls: "mono" },
@@ -49,7 +52,9 @@ const COLUMNS: Col[] = [
   { id: "errors", label: "Error", center: true, filter: "range", value: j => j.errors, render: j => j.errors || "—", cls: "mono" },
   { id: "rate", label: "Rate", center: true, filter: "range", unit: "%", value: j => j.rate, render: j => <span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span> },
   { id: "task_time", label: "Σ Task", center: true, filter: "range", unit: "min", value: j => Math.round(durMin(j.total_task_time)), render: j => j.total_task_time || "—", cls: "dim" },
-  { id: "cost", label: "Cost", center: true, filter: "range", unit: "$", value: cost, render: j => cost(j) ? `$${cost(j).toFixed(2)}` : "—", cls: "dim" },
+  { id: "avg_task", label: "Avg/task", title: "Average agent time per task (minutes, excludes grading)", center: true, filter: "range", unit: "min",
+    value: avgMin, render: j => avgMin(j) ? `${avgMin(j).toFixed(1)}m` : "—", cls: "dim mono" },
+  { id: "cost", label: "Cost", center: true, filter: "range", unit: "$", value: cost, render: j => cost(j) ? <>{`$${cost(j).toFixed(2)}`}{j.usage_missing ? <span className="warn-mark" title={`${j.usage_missing} trial(s) recorded no usage; their cost is not included`}> *</span> : null}</> : "—", cls: "dim nowrap" },
   { id: "credits", label: "Credits", center: true, filter: "range", value: j => j.credits, render: j => j.credits ? j.credits.toFixed(1) : "—", cls: "dim mono" },
   { id: "tok_in", label: "In tok", title: "Uncached input tokens", center: true, filter: "range", value: j => j.input_tokens, render: j => j.input_tokens || j.output_tokens ? fmtTok(j.input_tokens) : "—", cls: "dim mono" },
   { id: "tok_out", label: "Out tok", center: true, filter: "range", value: j => j.output_tokens, render: j => j.output_tokens ? fmtTok(j.output_tokens) : "—", cls: "dim mono" },
@@ -57,7 +62,7 @@ const COLUMNS: Col[] = [
   { id: "tok_cw", label: "Cache W", title: "Cache-write tokens", center: true, filter: "range", value: j => j.cache_write, render: j => j.cache_write ? fmtTok(j.cache_write) : "—", cls: "dim mono" },
   { id: "status", label: "Status", center: true, filter: "facet", value: j => j.status,
     render: j => j.status === "running" ? <span className="status-running">● {j.progress}/{j.n_total}</span> : <span className="status-done">✓</span> },
-  { id: "date", label: "Date", center: true, filter: "facet", value: j => j.started_at || "", render: j => fmtTime(j.started_at), cls: "dim" },
+  { id: "date", label: "Date", center: true, filter: "facet", value: j => j.started_at || "", render: j => fmtTime(j.started_at), cls: "dim nowrap" },
 ];
 
 // Facet value shown in the filter list (Date filters by day, not timestamp).
@@ -76,7 +81,7 @@ export default function DashboardPage() {
     try { return new Set(JSON.parse(sessionStorage.getItem("aae.dashboard.selected") || "[]")); } catch { return new Set(); }
   });
   useEffect(() => { sessionStorage.setItem("aae.dashboard.selected", JSON.stringify([...selected])); }, [selected]);
-  const [facets, setFacets] = usePersisted<Record<string, Set<string>>>("aae.dashboard.facets", {}, setMapCodec.encode, setMapCodec.decode);
+  const [facets, setFacets] = usePersisted<Record<string, Set<string>>, Record<string, string[]>>("aae.dashboard.facets", {}, setMapCodec.encode, setMapCodec.decode);
   const [ranges, setRanges] = usePersisted<Record<string, NumRange>>("aae.dashboard.ranges", {});
   const [hidden, setHidden] = useState<Set<string>>(() => {
     try { const v = localStorage.getItem(HIDDEN_KEY); return new Set(v ? JSON.parse(v) : DEFAULT_HIDDEN); }
@@ -123,10 +128,8 @@ export default function DashboardPage() {
 
   return (
     <>
-      <header>
-        <h1 onClick={() => navigate("/")}>🧪 AAE — Agent Auto Eval</h1>
-        <div className="header-actions">
-          <input className="search" placeholder="Search config / agent / model…" value={search} onChange={e => setSearch(e.target.value)} />
+      <AppHeader>
+        <input className="search" placeholder="Search config / agent / model…" value={search} onChange={e => setSearch(e.target.value)} />
           <ColumnPicker columns={COLUMNS} hidden={hidden} onChange={setHidden} />
           <button className={selected.size ? "btn-primary" : "btn-ghost"} disabled={!selected.size}
             title={selected.size ? "Plot the selected jobs" : "Tick jobs in the table first"}
@@ -135,11 +138,7 @@ export default function DashboardPage() {
           </button>
           {selected.size >= 2 && <button className="btn-primary" onClick={() => navigate(`/compare?ids=${[...selected].join(",")}`)}>Compare {selected.size}</button>}
           {selected.size > 0 && <button className="btn-ghost" onClick={() => setSelected(new Set())}>Deselect</button>}
-          <a href="https://github.com/vokako/auto-agent-eval" target="_blank" rel="noopener" className="github-link" title="GitHub">
-            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-          </a>
-        </div>
-      </header>
+      </AppHeader>
       <div className="stats-bar">
         <span>{sorted.length}/{jobs.length} jobs</span>
         <span>·</span>
@@ -169,7 +168,7 @@ export default function DashboardPage() {
         </tr></thead>
         <tbody>{sorted.map(j => (
           <tr key={j.id} className="row" onClick={() => navigate(`/jobs/${j.id}`)}>
-            <td><label onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.has(j.id)} onChange={() => { const n = new Set(selected); n.has(j.id) ? n.delete(j.id) : n.add(j.id); setSelected(n); }} /></label></td>
+            <td><label onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.has(j.id)} onChange={() => { const n = new Set(selected); if (n.has(j.id)) n.delete(j.id); else n.add(j.id); setSelected(n); }} /></label></td>
             {cols.map(c => <td key={c.id} className={`${c.center ? "c " : ""}${c.cls || ""}`}>{c.render(j)}</td>)}
           </tr>
         ))}</tbody>

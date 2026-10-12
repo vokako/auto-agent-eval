@@ -2,18 +2,19 @@ import { useEffect, useState } from "react";
 
 // useState that survives a page reload (localStorage). `encode`/`decode` convert values JSON can't
 // hold directly, such as Set.
-export function usePersisted<T>(key: string, initial: T, encode: (v: T) => unknown = v => v,
-                                decode: (raw: any) => T = raw => raw as T) {
+export function usePersisted<T, R = T>(key: string, initial: T, encode: (v: T) => R = v => v as unknown as R,
+                                       decode: (raw: R) => T = raw => raw as unknown as T) {
   const [value, setValue] = useState<T>(() => {
     try {
       const raw = localStorage.getItem(key);
-      return raw === null ? initial : decode(JSON.parse(raw));
+      return raw === null ? initial : decode(JSON.parse(raw) as R);
     } catch {
       return initial;
     }
   });
   useEffect(() => {
     try { localStorage.setItem(key, JSON.stringify(encode(value))); } catch { /* quota / private mode */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- encode is a pure codec, not state
   }, [key, value]);
   return [value, setValue] as const;
 }

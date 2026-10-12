@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { AppHeader } from "../components/AppHeader";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type EffortPoint, type EffortSeries } from "../lib/api";
 import { useFetch } from "../hooks/useFetch";
@@ -126,7 +127,7 @@ export default function EffortChartPage() {
   const [logCost, setLogCost] = usePersisted("aae.chart.logCostAxis", false);
   const [logTime, setLogTime] = usePersisted("aae.chart.logTime", false);
   const [focus, setFocus] = useState<string | null>(null);
-  const [hidden, setHidden] = usePersisted<Set<string>>("aae.chart.hidden", new Set(), setCodec.encode, setCodec.decode);
+  const [hidden, setHidden] = usePersisted<Set<string>, string[]>("aae.chart.hidden", new Set(), setCodec.encode, setCodec.decode);
 
   // Keep only the points (and series) belonging to the jobs ticked on the Jobs page.
   const data = useMemo(() => raw && {
@@ -136,10 +137,9 @@ export default function EffortChartPage() {
   if (loading || !data) return <div className="loading">Loading…</div>;
   if (!ids.size || !data.series.length) return (
     <>
-      <header>
-        <h1 onClick={() => navigate("/")}>🧪 AAE — Agent Auto Eval</h1>
-        <div className="header-actions"><button className="btn-ghost" onClick={() => navigate("/")}>← Jobs</button></div>
-      </header>
+      <AppHeader>
+        <button className="btn-ghost" onClick={() => navigate("/")}>← Jobs</button>
+      </AppHeader>
       <div className="loading">
         {ids.size ? "None of the selected jobs have results to plot (only AgentCore jobs do)." : "No jobs selected."}{" "}
         Tick jobs on the <a href="/" onClick={e => { e.preventDefault(); navigate("/"); }} style={{ color: "var(--blue)" }}>Jobs page</a>, then press Chart.
@@ -158,17 +158,14 @@ export default function EffortChartPage() {
     return { color: colorOf(s.agent), dash: DASHES[i % DASHES.length], marker: MARKERS[i % MARKERS.length] };
   };
   const shown = all.filter(s => !hidden.has(sid(s)));
-  const toggle = (k: string) => { const n = new Set(hidden); n.has(k) ? n.delete(k) : n.add(k); setHidden(n); };
+  const toggle = (k: string) => { const n = new Set(hidden); if (n.has(k)) n.delete(k); else n.add(k); setHidden(n); };
   const open = (job: string) => navigate(`/jobs/${job}`);
 
   return (
     <>
-      <header>
-        <h1 onClick={() => navigate("/")}>🧪 AAE — Agent Auto Eval</h1>
-        <div className="header-actions">
-          <button className="btn-ghost" onClick={() => navigate("/")}>← Jobs</button>
-        </div>
-      </header>
+      <AppHeader>
+        <button className="btn-ghost" onClick={() => navigate("/")}>← Jobs</button>
+      </AppHeader>
       <div className="chart-controls">
         <label className="chk"><input type="checkbox" checked={logCost} onChange={e => setLogCost(e.target.checked)} /> log cost axis</label>
         <label className="chk"><input type="checkbox" checked={logTime} onChange={e => setLogTime(e.target.checked)} /> log time axis</label>

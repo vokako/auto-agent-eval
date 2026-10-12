@@ -20,7 +20,7 @@ export function ColumnFilter({ values, selected, onChange }: Props) {
 
   const toggle = (val: string) => {
     const next = new Set(selected);
-    next.has(val) ? next.delete(val) : next.add(val);
+    if (next.has(val)) next.delete(val); else next.add(val);
     onChange(next);
   };
 
@@ -126,7 +126,7 @@ export function ColumnPicker({ columns, hidden, onChange }: { columns: { id: str
     if (open) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
-  const toggle = (id: string) => { const n = new Set(hidden); n.has(id) ? n.delete(id) : n.add(id); onChange(n); };
+  const toggle = (id: string) => { const n = new Set(hidden); if (n.has(id)) n.delete(id); else n.add(id); onChange(n); };
   return (
     <div className="col-filter col-picker" ref={ref}>
       <button className="btn-ghost" onClick={() => setOpen(!open)}>Columns{hidden.size ? ` (${columns.length - hidden.size}/${columns.length})` : ""} ▾</button>

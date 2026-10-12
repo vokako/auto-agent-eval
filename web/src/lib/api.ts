@@ -1,6 +1,7 @@
 import type { JobSummary, JobDetail, TaskDetail, CompareResult } from "../types";
 
-const BASE = import.meta.env.DEV ? "http://localhost:8080" : "";
+// Same-origin in production; in `npm run dev` Vite proxies /api to the backend (see vite.config.ts).
+export const BASE = "";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);

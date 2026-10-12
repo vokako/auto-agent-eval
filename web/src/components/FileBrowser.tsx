@@ -8,6 +8,7 @@ import "prismjs/components/prism-toml";
 import "prismjs/components/prism-markdown";
 import { fmtSize } from "../lib/format";
 import { JsonView } from "./JsonView";
+import { BASE } from "../lib/api";
 
 interface FileEntry { path: string; size: number; }
 
@@ -93,10 +94,9 @@ export function FileBrowser({ jobId, taskName }: { jobId: string; taskName: stri
   const [loading, setLoading] = useState(false);
   const codeRef = useRef<HTMLElement>(null);
 
-  const BASE = import.meta.env.DEV ? "http://localhost:8080" : "";
 
   useEffect(() => {
-    setFiles(null); setSelected(null); setContent(null);
+    // The parent keys this component by job + task, so state starts fresh for each task.
     fetch(`${BASE}/api/jobs/${jobId}/tasks/${taskName}/files`).then(r => r.json()).then(setFiles);
   }, [jobId, taskName]);
 
@@ -109,7 +109,7 @@ export function FileBrowser({ jobId, taskName }: { jobId: string; taskName: stri
   const openFile = async (path: string) => {
     setSelected(path); setLoading(true);
     try {
-      const res = await fetch(`${BASE}/api/jobs/${jobId}/tasks/${taskName}/files/${path}`);
+      const res = await fetch(`${BASE}/api/jobs/${jobId}/tasks/${taskName}/files/${encodeURI(path)}`);
       setContent((await res.json()).content);
     } catch { setContent("Failed to load"); }
     setLoading(false);
