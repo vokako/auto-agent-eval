@@ -36,8 +36,8 @@ def main():
     groups: dict[str, dict[str, Path]] = {}
     for rd in sorted(glob.glob(str(runner / "runs" / "*"))):
         name = os.path.basename(rd)
-        # *-retryN / *-lostN hold re-runs that retry_throttled.py merges into the parent run.
-        if (name.endswith("-r1") or re.search(r"-(retry|lost)\d+$", name) or name in SKIP
+        # *-retryN / *-lostN / *-resumeN hold re-runs that retry_throttled.py merges into the parent run.
+        if (name.endswith("-r1") or re.search(r"-(retry|lost|resume)\d+$", name) or name in SKIP
                 or not os.path.exists(f"{rd}/results.jsonl")):
             continue
         subset, cfg = name.split("-", 1)
