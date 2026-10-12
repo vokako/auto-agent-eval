@@ -38,6 +38,8 @@ def _expand(p: str) -> Path:
 
 # Marker written to agent.txt when a trial has no usage data; the dashboard shows its cost as "—".
 USAGE_MISSING = "# usage: not recorded"
+# Exception type for trials the model refused (safety filter); counted apart from failures.
+REFUSAL = "ModelRefusal"
 
 # Runs before 2026-10-10 did not record the installed harness version. Those trials are backfilled with
 # the version the later trials recorded, so every job shows one definite version per harness.
@@ -87,16 +89,21 @@ def run(cfg: dict, task_names: list[str], jobs_dir: Path) -> Path:
 
 
 def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
-            started: datetime, finished: datetime, dataset: str = "") -> None:
+            started: datetime, finished: datetime, dataset: str = "",
+            outcomes: dict[str, str] | None = None) -> None:
     """Write Harbor-style result.json plus one <task>__<run_id>/ dir per trial.
 
     results_jsonl may be one path or a list of paths; all their trials go into one job.
+    outcomes maps run_id -> "refused" | "throttled" (from the runner's scripts/classify_trials.py);
+    refused trials are recorded as the ModelRefusal exception instead of a timeout or error.
     """
     rewards: dict[str, list[str]] = {}
     exceptions: dict[str, list[str]] = {}
     files = results_jsonl if isinstance(results_jsonl, (list, tuple)) else [results_jsonl]
     first_summary: dict = {}
     versions_seen: set[str] = set()
+    variants: set[str] = set()
+    outcomes = outcomes or {}
     for line in (l for f in files for l in open(f)):
         if not line.strip():
             continue
@@ -116,7 +123,10 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
             (d / "agent" / "agent.txt").write_text(r.get("error", ""))
             continue
         rewards.setdefault(f'{float(s.get("reward") or 0):.1f}', []).append(tid)
-        if s.get("error"):
+        variants.add(r.get("steering") or "")
+        if outcomes.get(r.get("run_id")) == "refused":
+            exceptions.setdefault(REFUSAL, []).append(tid)
+        elif s.get("error"):
             exceptions.setdefault("AgentTimeoutError" if "timed out" in s["error"] else "Error", []).append(tid)
         u = s.get("usage") or {}
         harness = s.get("harness") or agent.get("name")
@@ -163,6 +173,7 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
                "agents": [{"name": fs.get("harness") or agent.get("name"),
                            "model_name": fs.get("model") or agent.get("model"),
                            "version": ", ".join(versions),
+                           "variant": ", ".join(sorted(v for v in variants if v)),
                            "effort": (fs.get("usage") or {}).get("effort") or fs.get("effort") or agent.get("effort"),
                            "mode": fs.get("mode")}],
                "datasets": [{"name": dataset}] if dataset else []},

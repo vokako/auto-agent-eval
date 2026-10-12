@@ -12,7 +12,9 @@ import { LazyLog } from "../components/LazyLog";
 import { FileBrowser } from "../components/FileBrowser";
 import type { TaskDetail } from "../types";
 
-type Filter = "all" | "pass" | "fail" | "timeout" | "error";
+type Filter = "all" | "pass" | "fail" | "timeout" | "refused" | "error";
+const REFUSAL = "ModelRefusal";
+const isErr = (e: string | null) => !!e && e !== "AgentTimeoutError" && e !== REFUSAL;
 type DetailTab = "info" | "files";
 
 export default function JobPage() {
@@ -31,7 +33,8 @@ export default function JobPage() {
   const pass = tasks.filter(t => t.passed).length;
   const fail = tasks.filter(t => !t.passed).length;
   const timeout = tasks.filter(t => t.error_type === "AgentTimeoutError").length;
-  const err = tasks.filter(t => t.error_type && t.error_type !== "AgentTimeoutError").length;
+  const refused = tasks.filter(t => t.error_type === REFUSAL).length;
+  const err = tasks.filter(t => isErr(t.error_type)).length;
   const rate = tasks.length ? pass / tasks.length * 100 : 0;
   const totalTests = tasks.reduce((s, t) => s + t.tests_total, 0);
   const passedTests = tasks.reduce((s, t) => s + t.tests_passed, 0);
@@ -49,7 +52,8 @@ export default function JobPage() {
       if (filter === "pass") return t.passed;
       if (filter === "fail") return !t.passed;
       if (filter === "timeout") return t.error_type === "AgentTimeoutError";
-      if (filter === "error") return t.error_type && t.error_type !== "AgentTimeoutError";
+      if (filter === "refused") return t.error_type === REFUSAL;
+      if (filter === "error") return isErr(t.error_type);
       return true;
     })
     .filter(t => !search || t.name.includes(search));
@@ -59,6 +63,7 @@ export default function JobPage() {
     pass,
     fail,
     timeout,
+    refused,
     error: err,
   };
 
@@ -76,7 +81,8 @@ export default function JobPage() {
         <div className="job-header-main">
           <div className="job-header-left">
             <h2>{job.agent || "—"} <span className="dim">/ {job.model || "?"}</span>
-              {job.effort && <span className="effort-tag">effort {job.effort}</span>}</h2>
+              {job.effort && <span className="effort-tag">effort {job.effort}</span>}
+              {job.variant && <span className="effort-tag">{job.variant}</span>}</h2>
             <span className="dim">{job.dataset || ""}</span>
           </div>
           <div className="job-header-stats">
@@ -92,11 +98,12 @@ export default function JobPage() {
             )}
           </div>
         </div>
-        <ResultBar pass={pass} fail={fail - timeout - err} error={err + timeout} />
+        <ResultBar pass={pass} fail={fail - timeout - err - refused} error={err + timeout + refused} />
         <div className="result-legend">
           <span className="legend-pass">Pass {pass}</span>
-          <span className="legend-fail">Fail {fail - timeout - err}</span>
+          <span className="legend-fail">Fail {fail - timeout - err - refused}</span>
           {timeout > 0 && <span className="legend-timeout">Timeout {timeout}</span>}
+          {refused > 0 && <span className="legend-refused">Refused {refused}</span>}
           {err > 0 && <span className="legend-err">Error {err}</span>}
         </div>
       </div>
@@ -105,7 +112,7 @@ export default function JobPage() {
         <div className={`task-panel ${task ? "narrow" : ""}`}>
           <div className="panel-toolbar">
             <div className="tab-group">
-              {(["all", "pass", "fail", "timeout", "error"] as const).map(f => (
+              {(["all", "pass", "fail", "timeout", "refused", "error"] as const).map(f => (
                 filterCounts[f] > 0 || f === "all" ? (
                   <button key={f} className={`tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
                     {f} ({filterCounts[f]})
@@ -141,7 +148,8 @@ export default function JobPage() {
                     <td className="r">{t.cost ? <span className="cost-tag">{t.cost}</span> : <span className="dim" title="Usage not recorded for this trial">—</span>}</td>
                     <td>
                       {t.error_type === "AgentTimeoutError" && <span className="timeout-tag">Timeout</span>}
-                      {t.error_type && t.error_type !== "AgentTimeoutError" && <span className="err-tag">{t.error_type.replace("Error", "")}</span>}
+                      {t.error_type === REFUSAL && <span className="refused-tag">Refused</span>}
+                      {isErr(t.error_type) && <span className="err-tag">{(t.error_type ?? "").replace("Error", "")}</span>}
                     </td>
                   </tr>
                 ))}

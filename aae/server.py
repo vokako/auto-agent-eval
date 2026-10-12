@@ -17,6 +17,9 @@ HARBOR_CACHE = Path(os.path.expanduser("~/.cache/harbor/tasks/packages/terminal-
 # Extra task source roots (colon-separated) searched for <task>/instruction.md, e.g. a Terminal-Bench checkout.
 TASK_DIRS = [Path(os.path.expanduser(p)) for p in os.environ.get("AAE_TASK_DIRS", "").split(":") if p]
 
+# Exception type the AgentCore converter uses for model safety refusals (aae/agentcore.py REFUSAL).
+REFUSAL = "ModelRefusal"
+
 app = FastAPI(title="AAE Dashboard")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -92,13 +95,14 @@ def _read_agent_info(job_dir: Path) -> tuple[str, str]:
 
 def _read_run_cfg(job_dir: Path) -> dict:
     """effort / mode / adapter from config.json (written by the AgentCore backend; empty for Harbor jobs)."""
-    out = {"effort": "", "mode": "", "adapter": "", "version": ""}
+    out = {"effort": "", "mode": "", "adapter": "", "version": "", "variant": ""}
     try:
         cfg = json.load(open(job_dir / "config.json"))
         a = (cfg.get("agents") or [{}])[0]
         out["effort"] = a.get("effort") or ""
         out["mode"] = a.get("mode") or ""
         out["version"] = a.get("version") or ""
+        out["variant"] = a.get("variant") or ""
         if cfg.get("backend") == "agentcore":
             out["adapter"] = f'agentcore {out["mode"]}'.strip()
     except Exception:
@@ -289,7 +293,8 @@ def list_jobs():
                 total = len(tasks)
                 errors = sum(1 for t in tasks.values() if t.get("error_type"))
                 timeouts = sum(1 for t in tasks.values() if t.get("error_type") == "AgentTimeoutError")
-                other_errors = errors - timeouts
+                refused = sum(1 for t in tasks.values() if t.get("error_type") == REFUSAL)
+                other_errors = errors - timeouts - refused
                 agent_name, model_name = _read_agent_info(job_dir)
                 extra = _agent_extra(job_dir)
                 run_cfg = _read_run_cfg(job_dir)
@@ -305,6 +310,7 @@ def list_jobs():
                     "agent": agent_name,
                     "model": model_name,
                     "effort": run_cfg["effort"],
+                    "variant": run_cfg["variant"],
                     "mode": run_cfg["mode"],
                     "adapter": run_cfg["adapter"] or ("built-in" if extra["builtin"] else "custom"),
                     "version": run_cfg["version"] or extra["version"],
@@ -313,6 +319,7 @@ def list_jobs():
                     "failed": total - passed,
                     "errors": other_errors,
                     "timeouts": timeouts,
+                    "refused": refused,
                     "total": total,
                     "rate": round(passed / total * 100, 1) if total else 0,
                     "duration": _duration_str(started, finished),
@@ -354,13 +361,14 @@ def effort_curves():
     for j in list_jobs():
         if not j.get("effort") or not j.get("finished"):
             continue
-        key = (j["agent"] or "", j["model"] or "")
-        s = series.setdefault(key, {"agent": key[0], "model": key[1], "version": j.get("version") or "", "points": []})
+        key = (j["agent"] or "", j["model"] or "", j.get("variant") or "")
+        s = series.setdefault(key, {"agent": key[0], "model": key[1], "variant": key[2],
+                                    "version": j.get("version") or "", "points": []})
         s["points"].append({"effort": j["effort"], "job": j["id"], "tasks": j["total"], "passed": j["passed"],
                             "cost_usd": j["cost_usd"], "credits": j["credits"], "agent_s": j["agent_s"]})
     for s in series.values():
         s["points"].sort(key=lambda p: _EFFORT_ORDER.index(p["effort"]) if p["effort"] in _EFFORT_ORDER else 99)
-    return {"efforts": _EFFORT_ORDER, "series": sorted(series.values(), key=lambda s: (s["agent"], s["model"]))}
+    return {"efforts": _EFFORT_ORDER, "series": sorted(series.values(), key=lambda s: (s["agent"], s["model"], s["variant"]))}
 
 
 def _get_cached_job(job_dir: Path) -> dict | None:
@@ -499,6 +507,7 @@ def get_job(config: str, timestamp: str):
         "adapter": run_cfg["adapter"] or ("built-in" if extra["builtin"] else "custom"),
         "version": run_cfg["version"] or extra["version"],
         "effort": run_cfg["effort"],
+        "variant": run_cfg["variant"],
         "dataset": extra["dataset"],
         "tasks": task_list,
         "started_at": parsed.get("started_at"),
@@ -668,7 +677,8 @@ def compare(ids: str):
         passed = sum(1 for t in tasks.values() if t["passed"])
         total = len(tasks)
         timeouts = sum(1 for t in tasks.values() if t.get("error_type") == "AgentTimeoutError")
-        errors = sum(1 for t in tasks.values() if t.get("error_type") and t.get("error_type") != "AgentTimeoutError")
+        refused = sum(1 for t in tasks.values() if t.get("error_type") == REFUSAL)
+        errors = sum(1 for t in tasks.values() if t.get("error_type") not in (None, "AgentTimeoutError", REFUSAL))
         # Read agent/model info
         parts = jid.split("/")
         job_dir = _job_dir(parts[0], parts[1])
@@ -676,6 +686,8 @@ def compare(ids: str):
         j = listed.get(jid, {})
         summary[jid] = {
             "effort": j.get("effort", ""),
+            "variant": j.get("variant", ""),
+            "refused": refused,
             "cost_usd": j.get("cost_usd", 0),
             "credits": j.get("credits", 0),
             "agent_s": j.get("agent_s", 0),

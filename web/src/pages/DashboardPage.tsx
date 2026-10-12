@@ -20,7 +20,7 @@ const durMin = (s: string) => {
 const cost = (j: JobSummary) => j.cost_usd || j.credits * 0.02;
 const avgMin = (j: JobSummary) => j.agent_s && j.total ? j.agent_s / 60 / j.total : 0;
 const shortModel = (m: string) => m.replace(/^(global|us|eu|apac)\./, "").replace(/^(anthropic|openai)\./, "");
-const plainFail = (j: JobSummary) => Math.max(j.failed - j.timeouts - j.errors, 0);
+const plainFail = (j: JobSummary) => Math.max(j.failed - j.timeouts - j.errors - (j.refused || 0), 0);
 const day = (ts: string) => ts ? new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
 
 interface Col {
@@ -42,6 +42,7 @@ const COLUMNS: Col[] = [
   { id: "agent", label: "Agent", filter: "facet", value: text("agent"), render: j => j.agent || "—", cls: "dim" },
   { id: "model", label: "Model", filter: "facet", value: text("model"), render: j => j.model ? <span title={j.model}>{shortModel(j.model)}</span> : "—", cls: "dim mono nowrap" },
   { id: "effort", label: "Effort", filter: "facet", value: text("effort"), render: j => j.effort || "—", cls: "dim" },
+  { id: "variant", label: "Variant", title: "Prompt / steering variant (empty = harness default)", filter: "facet", value: j => j.variant || "—", render: j => j.variant || "—", cls: "dim" },
   { id: "version", label: "Version", title: "Harness (agent CLI) version", filter: "facet", value: text("version"), render: j => j.version || "—", cls: "dim mono" },
   { id: "adapter", label: "Adapter", filter: "facet", value: text("adapter"), render: j => <AdapterTag adapter={j.adapter} /> },
   { id: "dataset", label: "Dataset", filter: "facet", value: j => j.dataset ? j.dataset.split("/").pop()! : "—", render: j => j.dataset ? j.dataset.split("/").pop() : "—", cls: "dim nowrap" },
@@ -49,6 +50,7 @@ const COLUMNS: Col[] = [
   { id: "passed", label: "Pass", center: true, filter: "range", value: j => j.passed, render: j => j.passed, cls: "mono" },
   { id: "fail", label: "Fail", center: true, filter: "range", value: plainFail, render: j => plainFail(j) || "—", cls: "mono" },
   { id: "timeouts", label: "Timeout", center: true, filter: "range", value: j => j.timeouts, render: j => j.timeouts || "—", cls: "mono" },
+  { id: "refused", label: "Refused", title: "Model safety refusals (not counted as Fail)", center: true, filter: "range", value: j => j.refused || 0, render: j => j.refused || "—", cls: "mono" },
   { id: "errors", label: "Error", center: true, filter: "range", value: j => j.errors, render: j => j.errors || "—", cls: "mono" },
   { id: "rate", label: "Rate", center: true, filter: "range", unit: "%", value: j => j.rate, render: j => <span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span> },
   { id: "task_time", label: "Σ Task", center: true, filter: "range", unit: "min", value: j => Math.round(durMin(j.total_task_time)), render: j => j.total_task_time || "—", cls: "dim" },

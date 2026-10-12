@@ -15,6 +15,8 @@ const MARKERS = ["circle", "square", "triangle", "diamond", "cross", "circle"] a
 const EFFORT_ABBR: Record<string, string> = { none: "N", minimal: "Mn", low: "L", medium: "M", high: "H", xhigh: "XH", max: "X" };
 
 const shortModel = (m: string) => m.replace(/^(global|us)\./, "").replace(/^(anthropic|openai)\./, "");
+const sid = (s: EffortSeries) => `${s.agent}|${s.model}|${s.variant}`;
+const label = (s: EffortSeries) => shortModel(s.model) + (s.variant ? ` + ${s.variant}` : "");
 const score = (p: EffortPoint) => p.tasks ? (p.passed / p.tasks) * 100 : 0;
 
 interface XAxis { key: "cost" | "time"; label: string; value: (p: EffortPoint) => number; fmt: (v: number) => string }
@@ -80,9 +82,9 @@ function ScoreChart({ axis, series, styleOf, logX, efforts, onOpen, focus }: {
         {[...series].sort((a, b) => Number(`${a.agent}|${a.model}` === focus) - Number(`${b.agent}|${b.model}` === focus)).map(s => {
           const st = styleOf(s);
           const pts = [...s.points].sort((a, b) => order(a.effort) - order(b.effort));
-          const on = focus === `${s.agent}|${s.model}`, dim = focus !== null && !on;
+          const on = focus === `${s.agent}|${s.model}|${s.variant}`, dim = focus !== null && !on;
           return (
-            <g key={`${s.agent}|${s.model}`} opacity={dim ? 0.15 : 1} style={{ transition: "opacity 120ms" }}>
+            <g key={`${s.agent}|${s.model}|${s.variant}`} opacity={dim ? 0.15 : 1} style={{ transition: "opacity 120ms" }}>
               <polyline fill="none" stroke={st.color} strokeWidth={on ? 3.5 : 2} strokeDasharray={st.dash} opacity={on ? 1 : 0.85}
                 points={pts.map(p => `${xOf(axis.value(p))},${yOf(score(p))}`).join(" ")} />
               {pts.map(p => {
@@ -90,7 +92,7 @@ function ScoreChart({ axis, series, styleOf, logX, efforts, onOpen, focus }: {
                 return (
                   <g key={p.effort} style={{ cursor: "pointer" }} onClick={() => onOpen(p.job)}
                     onMouseEnter={() => setHover({ x, y, text: [
-                      `${s.agent} · ${shortModel(s.model)} · ${p.effort}`,
+                      `${s.agent} · ${label(s)} · ${p.effort}`,
                       `score ${score(p).toFixed(1)}%  (${p.passed}/${p.tasks})`,
                       `cost $${p.cost_usd.toFixed(2)}${p.credits ? `  (${p.credits.toFixed(1)} credits)` : ""}`,
                       `avg agent time ${p.tasks ? (p.agent_s / 60 / p.tasks).toFixed(1) : "0"} min/task`,
@@ -151,8 +153,7 @@ export default function EffortChartPage() {
   const agents = [...new Set(all.map(s => s.agent))].sort();
   const colorOf = (a: string) => AGENT_COLORS[a] || FALLBACK[agents.indexOf(a) % FALLBACK.length];
   const idx = new Map<string, number>();
-  for (const a of agents) all.filter(s => s.agent === a).forEach((s, i) => idx.set(`${s.agent}|${s.model}`, i));
-  const sid = (s: EffortSeries) => `${s.agent}|${s.model}`;
+  for (const a of agents) all.filter(s => s.agent === a).forEach((s, i) => idx.set(sid(s), i));
   const styleOf = (s: EffortSeries): Style => {
     const i = idx.get(sid(s)) || 0;
     return { color: colorOf(s.agent), dash: DASHES[i % DASHES.length], marker: MARKERS[i % MARKERS.length] };
@@ -188,7 +189,7 @@ export default function EffortChartPage() {
                       <line x1={2} x2={32} y1={7} y2={7} stroke={st.color} strokeWidth={2} strokeDasharray={st.dash} />
                       <Marker kind={st.marker} x={17} y={7} color={st.color} />
                     </svg>
-                    <span>{shortModel(s.model)}</span>
+                    <span>{label(s)}</span>
                   </div>
                 );
               })}

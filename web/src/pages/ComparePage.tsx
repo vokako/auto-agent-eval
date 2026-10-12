@@ -36,7 +36,7 @@ export default function ComparePage() {
           return (
             <div key={jid} className="cmp-card">
               <div className="cmp-config">{jid.split("/")[0]}</div>
-              <div className="cmp-agent">{s.agent || "—"} / {s.model || "?"}{s.effort ? ` · ${s.effort}` : ""}</div>
+              <div className="cmp-agent">{s.agent || "—"} / {s.model || "?"}{s.effort ? ` · ${s.effort}` : ""}{s.variant ? ` · ${s.variant}` : ""}</div>
               <div className="cmp-score">{s.passed}<span className="cmp-total">/{s.total}</span></div>
               <div className="cmp-rate">{s.rate}%</div>
               <div className="cmp-meta">
@@ -44,8 +44,9 @@ export default function ComparePage() {
                 {s.agent_s && s.total ? <span>{(s.agent_s / 60 / s.total).toFixed(1)} min/task</span> : null}
               </div>
               <div className="cmp-breakdown">
-                <span className="legend-fail">Fail {s.failed - s.timeouts - s.errors}</span>
+                <span className="legend-fail">Fail {s.failed - s.timeouts - s.errors - (s.refused || 0)}</span>
                 {s.timeouts > 0 && <span className="legend-timeout">Timeout {s.timeouts}</span>}
+                {(s.refused || 0) > 0 && <span className="legend-refused">Refused {s.refused}</span>}
                 {s.errors > 0 && <span className="legend-err">Error {s.errors}</span>}
               </div>
             </div>
@@ -74,6 +75,7 @@ export default function ComparePage() {
                 if (!v) return <td key={jid} className="c dim">—</td>;
                 const label = v.passed ? "✓" :
                   v.error_type === "AgentTimeoutError" ? "✗ timeout" :
+                  v.error_type === "ModelRefusal" ? "✗ refused" :
                   v.error_type ? "✗ error" : "✗";
                 return <td key={jid} className={`c ${v.passed ? "cell-pass" : v.error_type ? "cell-err" : "cell-fail"}`}>{label}</td>;
               })}
