@@ -36,24 +36,13 @@ def _expand(p: str) -> Path:
     return Path(os.path.expanduser(p))
 
 
-# Runs before 2026-10-10 did not record the installed harness version. Each trial installs the latest
-# release at submit time, so it is inferred from release timestamps (npm `time` for Claude Code / Codex,
-# Last-Modified of desktop-release.q.us-east-1.amazonaws.com/<ver>/ for Kiro CLI). Shown with a "~" prefix.
-_RELEASES = {
-    "claude-code": [("2026-10-08T03:42:57Z", "2.1.294"), ("2026-10-08T18:22:58Z", "2.1.295"), ("2026-10-09T16:58:10Z", "2.1.296")],
-    "codex": [("2026-10-08T19:01:18Z", "0.162.0"), ("2026-10-09T19:50:30Z", "0.162.1")],
-    "kiro-cli": [("2026-10-06T14:22:28Z", "2.28.0"), ("2026-10-09T17:28:14Z", "2.29.0")],
-}
+# Runs before 2026-10-10 did not record the installed harness version. Those trials are backfilled with
+# the version the later trials recorded, so every job shows one definite version per harness.
+_BACKFILL_VERSION = {"claude-code": "2.1.296", "codex": "0.162.1", "kiro-cli": "2.29.0"}
 
 
-def _inferred_version(harness: str | None, submitted: str | None) -> str:
-    if not harness or not submitted:
-        return ""
-    v = ""
-    for ts, ver in _RELEASES.get(harness, []):
-        if submitted >= ts:
-            v = ver
-    return f"~{v}" if v else ""
+def _inferred_version(harness: str | None, submitted: str | None = None) -> str:
+    return _BACKFILL_VERSION.get(harness or "", "")
 
 
 def _price(pricing: dict, model: str, usage: dict, harness: str) -> float | None:
@@ -98,23 +87,18 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
             started: datetime, finished: datetime, dataset: str = "") -> None:
     """Write Harbor-style result.json plus one <task>__<run_id>/ dir per trial.
 
-    results_jsonl may be one path, a list of paths, or a list of (subset_label, path) pairs
-    (e.g. [("fast30", ...), ("hard20", ...)] merged into one job). Per-subset totals go to config.json.
+    results_jsonl may be one path or a list of paths; all their trials go into one job.
     """
     rewards: dict[str, list[str]] = {}
     exceptions: dict[str, list[str]] = {}
     files = results_jsonl if isinstance(results_jsonl, (list, tuple)) else [results_jsonl]
-    files = [f if isinstance(f, tuple) else ("", f) for f in files]
     first_summary: dict = {}
     versions_seen: set[str] = set()
-    subsets: dict[str, dict] = {}
-    for subset, line in ((lab, l) for lab, f in files for l in open(f)):
+    for line in (l for f in files for l in open(f)):
         if not line.strip():
             continue
         r = json.loads(line)
         s = r.get("summary") if isinstance(r.get("summary"), dict) else None
-        st = subsets.setdefault(subset or "all", {"tasks": 0, "passed": 0, "cost_usd": 0.0, "credits": 0.0, "agent_s": 0.0})
-        st["tasks"] += 1
         if s and not first_summary:
             first_summary = s
         if s:
@@ -138,7 +122,6 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
             lines.append(f'Credits: {u["credits"]}')
             per = (pricing.get("kiro-credit") or {}).get("usd_per_credit", 0.02)
             trial_cost = round(u["credits"] * per, 6)
-            st["credits"] += u["credits"]
             lines.append(json.dumps({"type": "result", "total_cost_usd": trial_cost, "usage": {}}))
         else:
             inp = u.get("input_tokens") or 0
@@ -151,13 +134,15 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
                                                "cache_read_input_tokens": u.get("cache_read_tokens") or 0,
                                                "cache_creation_input_tokens": u.get("cache_write_tokens") or 0}}))
         (d / "agent" / "agent.txt").write_text("\n".join(lines) + "\n")
-        st["cost_usd"] += trial_cost
-        st["passed"] += 1 if s.get("reward") == 1 else 0
-        st["agent_s"] += (s.get("timings_s") or {}).get("agent") or 0
         fin = datetime.fromisoformat(s["finished"].replace("Z", "+00:00"))
         total = (s.get("timings_s") or {}).get("total") or 0
+        agent_s = (s.get("timings_s") or {}).get("agent")
+        t0 = fin - timedelta(seconds=total)
         json.dump({"task_name": r["task"], "trial_name": tid, "reward": s.get("reward"),
-                   "started_at": (fin - timedelta(seconds=total)).isoformat(), "finished_at": fin.isoformat(),
+                   "started_at": t0.isoformat(), "finished_at": fin.isoformat(),
+                   **({"agent_execution": {"started_at": t0.isoformat(),
+                                           "finished_at": (t0 + timedelta(seconds=agent_s)).isoformat()}}
+                      if agent_s is not None else {}),
                    "agentcore": {"mode": s.get("mode"), "results": r.get("results"), "usage": u,
                                  "timings_s": s.get("timings_s"), "disk_free_mb": s.get("disk_free_mb")}},
                   open(d / "result.json", "w"), indent=2)
@@ -174,7 +159,5 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
                            "version": ", ".join(versions),
                            "effort": (fs.get("usage") or {}).get("effort") or fs.get("effort") or agent.get("effort"),
                            "mode": fs.get("mode")}],
-               "datasets": [{"name": dataset}] if dataset else [],
-               "subsets": {k: {**v, "cost_usd": round(v["cost_usd"], 4), "credits": round(v["credits"], 2),
-                               "agent_s": round(v["agent_s"])} for k, v in subsets.items()}},
+               "datasets": [{"name": dataset}] if dataset else []},
               open(out / "config.json", "w"), indent=2)

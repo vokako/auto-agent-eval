@@ -163,9 +163,9 @@ def _duration_str(started: str | None, finished: str | None) -> str:
         return ""
 
 
-def _sum_trial_durations(job_dir: Path) -> str:
-    """Sum individual trial durations (agent actual work time)."""
-    total_secs = 0
+def _trial_seconds(job_dir: Path, agent_only: bool = False) -> float:
+    """Sum trial durations in seconds. agent_only uses Harbor's agent_execution span when present."""
+    total_secs = 0.0
     for d in job_dir.iterdir():
         if not d.is_dir() or "__" not in d.name:
             continue
@@ -174,11 +174,18 @@ def _sum_trial_durations(job_dir: Path) -> str:
             continue
         try:
             t = json.load(open(rf))
-            s = datetime.fromisoformat(t["started_at"].replace("Z", "+00:00"))
-            e = datetime.fromisoformat(t["finished_at"].replace("Z", "+00:00"))
+            span = t.get("agent_execution") if agent_only and t.get("agent_execution") else t
+            s = datetime.fromisoformat(span["started_at"].replace("Z", "+00:00"))
+            e = datetime.fromisoformat(span["finished_at"].replace("Z", "+00:00"))
             total_secs += (e - s).total_seconds()
         except Exception:
             continue
+    return total_secs
+
+
+def _sum_trial_durations(job_dir: Path) -> str:
+    """Sum individual trial durations (agent actual work time)."""
+    total_secs = _trial_seconds(job_dir)
     if total_secs == 0:
         return ""
     hours, rem = divmod(int(total_secs), 3600)
@@ -298,6 +305,7 @@ def list_jobs():
                     "rate": round(passed / total * 100, 1) if total else 0,
                     "duration": _duration_str(started, finished),
                     "total_task_time": _sum_trial_durations(job_dir),
+                    "agent_s": round(_trial_seconds(job_dir, agent_only=True)),
                     "cost_usd": cost["cost_usd"],
                     "credits": cost["credits"],
                     "input_tokens": cost["input_tokens"],
@@ -324,35 +332,19 @@ _EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
 
 @app.get("/api/effort-curves")
 def effort_curves():
-    """Per (agent, model): cost / pass / agent time at each effort level, over all tasks of the job.
+    """Per (agent, model): pass / cost / agent time at each effort level.
 
-    Sums the per-subset totals in AgentCore jobs' config.json (e.g. Fast30 + Hard20 -> 50 tasks).
-    Jobs without subsets (Harbor runs) are skipped.
+    Built from the same per-job totals as /api/jobs (all trials in the job), so the dashboard
+    never needs to know how the test client grouped tasks. Jobs without an effort are skipped.
     """
     series: dict[tuple, dict] = {}
-    if JOBS_DIR.exists():
-        for config_dir in sorted(JOBS_DIR.iterdir()):
-            if not config_dir.is_dir() or config_dir.name.startswith("."):
-                continue
-            for job_dir in config_dir.iterdir():
-                try:
-                    cfg = json.load(open(job_dir / "config.json"))
-                except Exception:
-                    continue
-                a = (cfg.get("agents") or [{}])[0]
-                effort = a.get("effort") or ""
-                subsets = cfg.get("subsets") or {}
-                if not subsets:
-                    continue
-                tot: dict[str, float] = {}
-                for st in subsets.values():
-                    for k, v in st.items():
-                        if isinstance(v, (int, float)):
-                            tot[k] = tot.get(k, 0) + v
-                key = (a.get("name") or "", a.get("model_name") or "")
-                s = series.setdefault(key, {"agent": key[0], "model": key[1], "subset": "+".join(sorted(subsets)),
-                                            "version": a.get("version") or "", "points": []})
-                s["points"].append({"effort": effort, "job": f"{config_dir.name}/{job_dir.name}", **tot})
+    for j in list_jobs():
+        if not j.get("effort") or not j.get("finished"):
+            continue
+        key = (j["agent"] or "", j["model"] or "")
+        s = series.setdefault(key, {"agent": key[0], "model": key[1], "version": j.get("version") or "", "points": []})
+        s["points"].append({"effort": j["effort"], "job": j["id"], "tasks": j["total"], "passed": j["passed"],
+                            "cost_usd": j["cost_usd"], "credits": j["credits"], "agent_s": j["agent_s"]})
     for s in series.values():
         s["points"].sort(key=lambda p: _EFFORT_ORDER.index(p["effort"]) if p["effort"] in _EFFORT_ORDER else 99)
     return {"efforts": _EFFORT_ORDER, "series": sorted(series.values(), key=lambda s: (s["agent"], s["model"]))}

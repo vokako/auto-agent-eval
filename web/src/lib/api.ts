@@ -18,5 +18,5 @@ export const api = {
 };
 
 export interface EffortPoint { effort: string; job: string; tasks: number; passed: number; cost_usd: number; credits: number; agent_s: number }
-export interface EffortSeries { agent: string; model: string; subset: string; version: string; points: EffortPoint[] }
+export interface EffortSeries { agent: string; model: string; version: string; points: EffortPoint[] }
 export interface EffortCurves { efforts: string[]; series: EffortSeries[] }

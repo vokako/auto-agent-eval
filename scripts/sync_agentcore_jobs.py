@@ -1,9 +1,10 @@
-"""Rebuild jobs/ac-<config>/ from agentcore-bench-runner's runs/ (Fast30 + Hard20 merged per config).
+"""Rebuild jobs/ac-<config>/ from agentcore-bench-runner's runs/.
 
 Usage: .venv/bin/python scripts/sync_agentcore_jobs.py [--runner ~/work/projects/agentcore-bench-runner]
 
-One job per harness + model + effort. runs/fast30-<cfg> and runs/hard20-<cfg> become subsets
-"fast30" / "hard20" of jobs/ac-<cfg>/<timestamp>/. Existing jobs/ac-* dirs are replaced; trial runs
+One job per harness + model + effort. The runner executes the 50-task suite as two batches
+(runs/fast30-<cfg> and runs/hard20-<cfg>); this script merges their trials into a single job
+jobs/ac-<cfg>/<timestamp>/ with dataset "tb2-50", so the dashboard only ever sees one job. Existing jobs/ac-* dirs are replaced; trial runs
 (*-r1) and the Mantle-route Codex run are skipped. Only finished trials (with a summary) are counted
 for cost; unfinished ones show up as errors until the next sync.
 """
@@ -19,7 +20,8 @@ from pathlib import Path
 from aae.agentcore import convert
 
 SKIP = {"fast30-codex-gpt61sol-mantle-high"}  # in-region Mantle route, superseded by the global run
-SUBSETS = ("fast30", "hard20")
+SUBSETS = ("fast30", "hard20")  # runner batches that together make up the 50-task suite
+DATASET = "tb2-50"
 
 
 def main():
@@ -46,18 +48,17 @@ def main():
     for old in jobs.glob("ac-*"):
         shutil.rmtree(old)
     for cfg, g in sorted(groups.items()):
-        files = [(s, g[s]) for s in SUBSETS if s in g]
-        rows = [json.loads(l) for _, f in files for l in open(f) if l.strip()]
+        files = [g[s] for s in SUBSETS if s in g]
+        rows = [json.loads(l) for f in files for l in open(f) if l.strip()]
         done = [r["summary"] for r in rows if isinstance(r.get("summary"), dict)]
         if not done:
             continue
         fins = [datetime.fromisoformat(s["finished"].replace("Z", "+00:00")) for s in done]
         start = min(f - timedelta(seconds=(s.get("timings_s") or {}).get("total") or 0) for f, s in zip(fins, done))
-        label = "+".join(s for s, _ in files)
         out = jobs / f"ac-{cfg}" / start.strftime("%Y-%m-%d__%H-%M-%S")
         out.mkdir(parents=True)
-        convert(files, out, pricing, {}, start, max(fins), dataset=f"tb2-{label}")
-        print(f"{cfg:26s} {label:14s} {len(done)}/{len(rows)} finished")
+        convert(files, out, pricing, {}, start, max(fins), dataset=DATASET if len(files) == len(SUBSETS) else f"tb2-{'+'.join(s for s in SUBSETS if s in g)}")
+        print(f"{cfg:26s} {len(done)}/{len(rows)} finished")
 
 
 if __name__ == "__main__":
