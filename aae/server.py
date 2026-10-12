@@ -324,10 +324,10 @@ _EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
 
 @app.get("/api/effort-curves")
 def effort_curves():
-    """Per (agent, model, task subset): cost / pass / agent time at each effort level.
+    """Per (agent, model): cost / pass / agent time at each effort level, over all tasks of the job.
 
-    Reads per-subset totals from AgentCore jobs' config.json, so Fast30 and Hard20 stay separate
-    even when one job merges both. Jobs without subsets (Harbor runs) are skipped.
+    Sums the per-subset totals in AgentCore jobs' config.json (e.g. Fast30 + Hard20 -> 50 tasks).
+    Jobs without subsets (Harbor runs) are skipped.
     """
     series: dict[tuple, dict] = {}
     if JOBS_DIR.exists():
@@ -341,14 +341,21 @@ def effort_curves():
                     continue
                 a = (cfg.get("agents") or [{}])[0]
                 effort = a.get("effort") or ""
-                for subset, st in (cfg.get("subsets") or {}).items():
-                    key = (a.get("name") or "", a.get("model_name") or "", subset)
-                    s = series.setdefault(key, {"agent": key[0], "model": key[1], "subset": subset,
-                                                "version": a.get("version") or "", "points": []})
-                    s["points"].append({"effort": effort, "job": f"{config_dir.name}/{job_dir.name}", **st})
+                subsets = cfg.get("subsets") or {}
+                if not subsets:
+                    continue
+                tot: dict[str, float] = {}
+                for st in subsets.values():
+                    for k, v in st.items():
+                        if isinstance(v, (int, float)):
+                            tot[k] = tot.get(k, 0) + v
+                key = (a.get("name") or "", a.get("model_name") or "")
+                s = series.setdefault(key, {"agent": key[0], "model": key[1], "subset": "+".join(sorted(subsets)),
+                                            "version": a.get("version") or "", "points": []})
+                s["points"].append({"effort": effort, "job": f"{config_dir.name}/{job_dir.name}", **tot})
     for s in series.values():
         s["points"].sort(key=lambda p: _EFFORT_ORDER.index(p["effort"]) if p["effort"] in _EFFORT_ORDER else 99)
-    return {"efforts": _EFFORT_ORDER, "series": sorted(series.values(), key=lambda s: (s["subset"], s["agent"], s["model"]))}
+    return {"efforts": _EFFORT_ORDER, "series": sorted(series.values(), key=lambda s: (s["agent"], s["model"]))}
 
 
 def _get_cached_job(job_dir: Path) -> dict | None:

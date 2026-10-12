@@ -6,9 +6,9 @@ import { usePersisted, setCodec } from "../hooks/usePersisted";
 
 // One colour per agent (harness); models of the same agent share it and differ by dash + marker.
 const AGENT_COLORS: Record<string, string> = {
-  "claude-code": "#f59e0b", "codex": "#34d399", "kiro-cli": "#a78bfa",
+  "claude-code": "#f59e0b", "codex": "#3b82f6", "kiro-cli": "#a78bfa",
 };
-const FALLBACK = ["#60a5fa", "#f87171", "#fbbf24", "#22d3ee"];
+const FALLBACK = ["#f472b6", "#f87171", "#34d399", "#22d3ee"];
 const DASHES = ["", "6 4", "2 4", "10 4 2 4", "1 3", "12 6"];
 const MARKERS = ["circle", "square", "triangle", "diamond", "cross", "circle"] as const;
 const EFFORT_ABBR: Record<string, string> = { none: "N", minimal: "Mn", low: "L", medium: "M", high: "H", xhigh: "XH", max: "X" };
@@ -33,9 +33,9 @@ function Marker({ kind, x, y, color }: { kind: typeof MARKERS[number]; x: number
 
 interface Style { color: string; dash: string; marker: typeof MARKERS[number] }
 
-function ScoreChart({ axis, series, styleOf, logX, efforts, onOpen }: {
+function ScoreChart({ axis, series, styleOf, logX, efforts, onOpen, focus }: {
   axis: XAxis; series: EffortSeries[]; styleOf: (s: EffortSeries) => Style; logX: boolean;
-  efforts: string[]; onOpen: (job: string) => void;
+  efforts: string[]; onOpen: (job: string) => void; focus: string | null;
 }) {
   const [hover, setHover] = useState<{ x: number; y: number; text: string[] } | null>(null);
   const W = 760, H = 460, L = 56, R = 20, T = 30, B = 46;
@@ -76,12 +76,13 @@ function ScoreChart({ axis, series, styleOf, logX, efforts, onOpen }: {
         ))}
         <text x={(L + W - R) / 2} y={H - 6} textAnchor="middle" fill="var(--dim)" fontSize={12}>{axis.label}{useLog ? " · log" : ""}</text>
         <text x={14} y={(T + H - B) / 2} textAnchor="middle" fill="var(--dim)" fontSize={12} transform={`rotate(-90 14 ${(T + H - B) / 2})`}>Score (pass rate)</text>
-        {series.map(s => {
+        {[...series].sort((a, b) => Number(`${a.agent}|${a.model}` === focus) - Number(`${b.agent}|${b.model}` === focus)).map(s => {
           const st = styleOf(s);
           const pts = [...s.points].sort((a, b) => order(a.effort) - order(b.effort));
+          const on = focus === `${s.agent}|${s.model}`, dim = focus !== null && !on;
           return (
-            <g key={`${s.agent}|${s.model}`}>
-              <polyline fill="none" stroke={st.color} strokeWidth={2} strokeDasharray={st.dash} opacity={0.85}
+            <g key={`${s.agent}|${s.model}`} opacity={dim ? 0.15 : 1} style={{ transition: "opacity 120ms" }}>
+              <polyline fill="none" stroke={st.color} strokeWidth={on ? 3.5 : 2} strokeDasharray={st.dash} opacity={on ? 1 : 0.85}
                 points={pts.map(p => `${xOf(axis.value(p))},${yOf(score(p))}`).join(" ")} />
               {pts.map(p => {
                 const x = xOf(axis.value(p)), y = yOf(score(p));
@@ -122,9 +123,9 @@ export default function EffortChartPage() {
   const [params] = useSearchParams();
   const ids = useMemo(() => new Set((params.get("ids") || "").split(",").filter(Boolean)), [params]);
   const { data: raw, loading } = useFetch(() => api.effortCurves(), []);
-  const [subset, setSubset] = usePersisted<string>("aae.chart.subset", "");
-  const [logCost, setLogCost] = usePersisted("aae.chart.logCost", true);
+  const [logCost, setLogCost] = usePersisted("aae.chart.logCostAxis", false);
   const [logTime, setLogTime] = usePersisted("aae.chart.logTime", false);
+  const [focus, setFocus] = useState<string | null>(null);
   const [hidden, setHidden] = usePersisted<Set<string>>("aae.chart.hidden", new Set(), setCodec.encode, setCodec.decode);
 
   // Keep only the points (and series) belonging to the jobs ticked on the Jobs page.
@@ -132,8 +133,6 @@ export default function EffortChartPage() {
     ...raw,
     series: raw.series.map(s => ({ ...s, points: s.points.filter(p => ids.has(p.job)) })).filter(s => s.points.length),
   }, [raw, ids]);
-  const subsets = useMemo(() => [...new Set((data?.series || []).map(s => s.subset))].sort(), [data]);
-  const cur = subsets.includes(subset) ? subset : subsets[0] || "";
   if (loading || !data) return <div className="loading">Loading…</div>;
   if (!ids.size || !data.series.length) return (
     <>
@@ -142,13 +141,13 @@ export default function EffortChartPage() {
         <div className="header-actions"><button className="btn-ghost" onClick={() => navigate("/")}>← Jobs</button></div>
       </header>
       <div className="loading">
-        {ids.size ? "None of the selected jobs have per-task-set results to plot (only AgentCore jobs do)." : "No jobs selected."}{" "}
+        {ids.size ? "None of the selected jobs have results to plot (only AgentCore jobs do)." : "No jobs selected."}{" "}
         Tick jobs on the <a href="/" onClick={e => { e.preventDefault(); navigate("/"); }} style={{ color: "var(--blue)" }}>Jobs page</a>, then press Chart.
       </div>
     </>
   );
 
-  const all = data.series.filter(s => s.subset === cur);
+  const all = data.series;
   const agents = [...new Set(all.map(s => s.agent))].sort();
   const colorOf = (a: string) => AGENT_COLORS[a] || FALLBACK[agents.indexOf(a) % FALLBACK.length];
   const idx = new Map<string, number>();
@@ -171,19 +170,14 @@ export default function EffortChartPage() {
         </div>
       </header>
       <div className="chart-controls">
-        <label>Task set
-          <select value={cur} onChange={e => setSubset(e.target.value)}>
-            {subsets.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
         <label className="chk"><input type="checkbox" checked={logCost} onChange={e => setLogCost(e.target.checked)} /> log cost axis</label>
         <label className="chk"><input type="checkbox" checked={logTime} onChange={e => setLogTime(e.target.checked)} /> log time axis</label>
         <span className="muted">Each line joins one agent + model across effort (L → M → H). Kiro credits priced at $0.02.</span>
       </div>
       <div className="chart-wrap">
         <div className="chart-pair">
-          <ScoreChart axis={X_AXES[0]} series={shown} styleOf={styleOf} logX={logCost} efforts={data.efforts} onOpen={open} />
-          <ScoreChart axis={X_AXES[1]} series={shown} styleOf={styleOf} logX={logTime} efforts={data.efforts} onOpen={open} />
+          <ScoreChart axis={X_AXES[0]} series={shown} styleOf={styleOf} logX={logCost} efforts={data.efforts} onOpen={open} focus={focus} />
+          <ScoreChart axis={X_AXES[1]} series={shown} styleOf={styleOf} logX={logTime} efforts={data.efforts} onOpen={open} focus={focus} />
         </div>
         <div className="chart-legend">
           {agents.map(a => (
@@ -192,7 +186,7 @@ export default function EffortChartPage() {
               {all.filter(s => s.agent === a).map(s => {
                 const st = styleOf(s), off = hidden.has(sid(s));
                 return (
-                  <div key={sid(s)} className={`legend-item${off ? " off" : ""}`} onClick={() => toggle(sid(s))} title={s.version ? `version ${s.version}` : undefined}>
+                  <div key={sid(s)} className={`legend-item${off ? " off" : ""}`} onClick={() => toggle(sid(s))} onMouseEnter={() => !off && setFocus(sid(s))} onMouseLeave={() => setFocus(null)} title={s.version ? `version ${s.version}` : undefined}>
                     <svg width={34} height={14}>
                       <line x1={2} x2={32} y1={7} y2={7} stroke={st.color} strokeWidth={2} strokeDasharray={st.dash} />
                       <Marker kind={st.marker} x={17} y={7} color={st.color} />
