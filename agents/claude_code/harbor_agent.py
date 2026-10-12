@@ -1,6 +1,5 @@
 """Claude Code agent — thin wrapper around Harbor's built-in for system_prompt support."""
 
-import shlex
 from harbor.agents.installed.claude_code import ClaudeCode
 from harbor.agents.installed.base import with_prompt_template
 from harbor.environments.base import BaseEnvironment

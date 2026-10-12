@@ -36,6 +36,9 @@ def _expand(p: str) -> Path:
     return Path(os.path.expanduser(p))
 
 
+# Marker written to agent.txt when a trial has no usage data; the dashboard shows its cost as "—".
+USAGE_MISSING = "# usage: not recorded"
+
 # Runs before 2026-10-10 did not record the installed harness version. Those trials are backfilled with
 # the version the later trials recorded, so every job shows one definite version per harness.
 _BACKFILL_VERSION = {"claude-code": "2.1.296", "codex": "0.162.1", "kiro-cli": "2.29.0"}
@@ -118,7 +121,10 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
         u = s.get("usage") or {}
         harness = s.get("harness") or agent.get("name")
         lines = [f'# harness={harness} model={s.get("model")} effort={u.get("effort", agent.get("effort", ""))}']
-        if u.get("credits") is not None:
+        if not (u.get("credits") or u.get("output_tokens") or u.get("turns")):
+            # The harness reported no usage for this trial (e.g. its event stream was cut off).
+            lines.append(USAGE_MISSING)
+        elif u.get("credits") is not None:
             lines.append(f'Credits: {u["credits"]}')
             per = (pricing.get("kiro-credit") or {}).get("usd_per_credit", 0.02)
             trial_cost = round(u["credits"] * per, 6)

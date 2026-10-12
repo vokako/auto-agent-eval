@@ -54,7 +54,7 @@ def main():
         if not done:
             continue
         fins = [datetime.fromisoformat(s["finished"].replace("Z", "+00:00")) for s in done]
-        start = min(f - timedelta(seconds=(s.get("timings_s") or {}).get("total") or 0) for f, s in zip(fins, done))
+        start = min(f - timedelta(seconds=(s.get("timings_s") or {}).get("total") or 0) for f, s in zip(fins, done, strict=True))
         out = jobs / f"ac-{cfg}" / start.strftime("%Y-%m-%d__%H-%M-%S")
         out.mkdir(parents=True)
         convert(files, out, pricing, {}, start, max(fins), dataset=DATASET if len(files) == len(SUBSETS) else f"tb2-{'+'.join(s for s in SUBSETS if s in g)}")
