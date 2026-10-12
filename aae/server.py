@@ -355,16 +355,17 @@ def effort_curves():
     """Per (agent, model): pass / cost / agent time at each effort level.
 
     Built from the same per-job totals as /api/jobs (all trials in the job), so the dashboard
-    never needs to know how the test client grouped tasks. Jobs without an effort are skipped.
+    never needs to know how the test client grouped tasks. A job without an effort (a model that
+    takes none, e.g. kiro's "auto") is a single point at effort "default".
     """
     series: dict[tuple, dict] = {}
     for j in list_jobs():
-        if not j.get("effort") or not j.get("finished"):
+        if not j.get("finished"):
             continue
         key = (j["agent"] or "", j["model"] or "", j.get("variant") or "")
         s = series.setdefault(key, {"agent": key[0], "model": key[1], "variant": key[2],
                                     "version": j.get("version") or "", "points": []})
-        s["points"].append({"effort": j["effort"], "job": j["id"], "tasks": j["total"], "passed": j["passed"],
+        s["points"].append({"effort": j.get("effort") or "default", "job": j["id"], "tasks": j["total"], "passed": j["passed"],
                             "cost_usd": j["cost_usd"], "credits": j["credits"], "agent_s": j["agent_s"]})
     for s in series.values():
         s["points"].sort(key=lambda p: _EFFORT_ORDER.index(p["effort"]) if p["effort"] in _EFFORT_ORDER else 99)
