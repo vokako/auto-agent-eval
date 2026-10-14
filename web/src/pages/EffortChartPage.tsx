@@ -7,7 +7,7 @@ import { usePersisted, setCodec } from "../hooks/usePersisted";
 
 // One colour per agent (harness); models of the same agent share it and differ by dash + marker.
 const AGENT_COLORS: Record<string, string> = {
-  "claude-code": "#f59e0b", "codex": "#3b82f6", "kiro-cli": "#a78bfa",
+  "claude-code": "#f59e0b", "codex": "#3b82f6", "kiro-cli": "#a78bfa", "kimi-code": "#14b8a6",
 };
 const FALLBACK = ["#f472b6", "#f87171", "#34d399", "#22d3ee"];
 const DASHES = ["", "6 4", "2 4", "10 4 2 4", "1 3", "12 6"];
