@@ -136,7 +136,10 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
             lines.append(USAGE_MISSING)
         elif u.get("credits") is not None:
             lines.append(f'Credits: {u["credits"]}')
-            per = (pricing.get("kiro-credit") or {}).get("usd_per_credit", 0.02)
+            # Credits are vendor units: only Kiro's has a known USD rate (pricing.json "kiro-credit").
+            # Qoder / CodeBuddy credits are a different unit with no published USD price, so no USD.
+            per = (pricing.get(f"{harness}-credit") or pricing.get("kiro-credit") or {}).get("usd_per_credit", 0.02) \
+                if harness == "kiro-cli" else (pricing.get(f"{harness}-credit") or {}).get("usd_per_credit", 0)
             trial_cost = round(u["credits"] * per, 6)
             lines.append(json.dumps({"type": "result", "total_cost_usd": trial_cost, "usage": {}}))
         else:
