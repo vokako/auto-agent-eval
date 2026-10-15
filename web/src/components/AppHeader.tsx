@@ -8,7 +8,7 @@ export function AppHeader({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   return (
     <header>
-      <h1 onClick={() => navigate("/")}>🧪 AAE — Agent Auto Eval</h1>
+      <h1 onClick={() => navigate("/")}>🧪 AAE — Auto Agent Eval</h1>
       <div className="header-actions">
         {children}
         <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="github-link" title="GitHub">
