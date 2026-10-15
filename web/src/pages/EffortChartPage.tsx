@@ -20,10 +20,12 @@ const shortModel = (m: string) => m.replace(/^(global|us)\./, "").replace(/^(ant
 const sid = (s: EffortSeries) => `${s.agent}|${s.model}|${s.variant}`;
 const label = (s: EffortSeries) => shortModel(s.model) + (s.variant ? ` + ${s.variant}` : "");
 const score = (p: EffortPoint) => p.tasks ? (p.passed / p.tasks) * 100 : 0;
+const avgCost = (p: EffortPoint) => p.tasks ? p.cost_usd / p.tasks : 0;
 
 interface XAxis { key: "cost" | "time"; label: string; value: (p: EffortPoint) => number; fmt: (v: number) => string }
 const X_AXES: XAxis[] = [
-  { key: "cost", label: "Total cost (USD)", value: p => p.cost_usd, fmt: v => v >= 10 ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}` },
+  // Per scored task: tasks excludes not-run trials (quota exhausted), which also carry no cost.
+  { key: "cost", label: "Avg cost per task (USD)", value: avgCost, fmt: v => v >= 1 ? `$${v.toFixed(2)}` : `$${v.toFixed(3)}` },
   { key: "time", label: "Avg agent time per task (min)", value: p => p.tasks ? p.agent_s / 60 / p.tasks : 0, fmt: v => v < 10 ? `${v.toFixed(1)}m` : `${v.toFixed(0)}m` },
 ];
 
@@ -96,7 +98,7 @@ function ScoreChart({ axis, series, styleOf, logX, efforts, onOpen, focus }: {
                     onMouseEnter={() => setHover({ x, y, text: [
                       `${s.agent} · ${label(s)} · ${p.effort}`,
                       `score ${score(p).toFixed(1)}%  (${p.passed}/${p.tasks})`,
-                      `cost $${p.cost_usd.toFixed(2)}${p.credits ? `  (${p.credits.toFixed(1)} credits)` : ""}`,
+                      `avg cost $${avgCost(p).toFixed(3)}/task  (total $${p.cost_usd.toFixed(2)}${p.credits ? `, ${p.credits.toFixed(1)} credits` : ""})`,
                       `avg agent time ${p.tasks ? (p.agent_s / 60 / p.tasks).toFixed(1) : "0"} min/task`,
                     ] })}>
                     <Marker kind={st.marker} x={x} y={y} color={st.color} />
