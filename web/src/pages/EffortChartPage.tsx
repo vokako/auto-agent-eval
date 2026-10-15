@@ -5,13 +5,14 @@ import { api, type EffortPoint, type EffortSeries } from "../lib/api";
 import { useFetch } from "../hooks/useFetch";
 import { usePersisted, setCodec } from "../hooks/usePersisted";
 
-// One colour per agent (harness); models of the same agent share it and differ by dash + marker.
-const AGENT_COLORS: Record<string, string> = {
-  "claude-code": "#f59e0b", "codex": "#3b82f6", "kiro-cli": "#a78bfa", "kimi-code": "#14b8a6",
+// One hue family per agent (harness). Models of the same agent get different shades of it and a
+// dash + marker pair that is unique within the agent (30 combinations), so no two series look alike.
+const AGENT_HUES: Record<string, number> = {
+  "claude-code": 35, "codex": 215, "kiro-cli": 268, "kimi-code": 172, "qoder-cn": 325, "codebuddy": 115,
 };
-const FALLBACK = ["#f472b6", "#f87171", "#34d399", "#22d3ee"];
+const FALLBACK_HUES = [0, 190, 55, 295, 145, 245];
 const DASHES = ["", "6 4", "2 4", "10 4 2 4", "1 3", "12 6"];
-const MARKERS = ["circle", "square", "triangle", "diamond", "cross", "circle"] as const;
+const MARKERS = ["circle", "square", "triangle", "diamond", "cross"] as const;
 const EFFORT_ABBR: Record<string, string> = { none: "N", minimal: "Mn", low: "L", medium: "M", high: "H", xhigh: "XH", max: "X" };
 
 const shortModel = (m: string) => m.replace(/^(global|us)\./, "").replace(/^(anthropic|openai)\./, "");
@@ -151,12 +152,27 @@ export default function EffortChartPage() {
 
   const all = data.series;
   const agents = [...new Set(all.map(s => s.agent))].sort();
-  const colorOf = (a: string) => AGENT_COLORS[a] || FALLBACK[agents.indexOf(a) % FALLBACK.length];
+  // Styles are assigned over every series the API returns, not only the ticked jobs.
+  const every = raw?.series ?? all;
+  const unknown = [...new Set(every.map(s => s.agent))].sort().filter(a => !(a in AGENT_HUES));
+  const hueOf = (a: string) => AGENT_HUES[a] ?? FALLBACK_HUES[unknown.indexOf(a) % FALLBACK_HUES.length];
   const idx = new Map<string, number>();
-  for (const a of agents) all.filter(s => s.agent === a).forEach((s, i) => idx.set(sid(s), i));
+  const count = new Map<string, number>();
+  for (const a of new Set(every.map(s => s.agent))) {
+    // Stable order inside an agent, so a series keeps its style when others are ticked or unticked.
+    const own = every.filter(s => s.agent === a).sort((x, y) => sid(x).localeCompare(sid(y)));
+    own.forEach((s, i) => idx.set(sid(s), i));
+    count.set(a, own.length);
+  }
   const styleOf = (s: EffortSeries): Style => {
-    const i = idx.get(sid(s)) || 0;
-    return { color: colorOf(s.agent), dash: DASHES[i % DASHES.length], marker: MARKERS[i % MARKERS.length] };
+    const i = idx.get(sid(s)) || 0, n = count.get(s.agent) || 1;
+    // Shade: hue +-12 in steps of 3, lightness spread 72% -> 48% across the agent's series.
+    const hue = hueOf(s.agent) + ((i % 3) - 1) * 12;
+    const rows = Math.max(Math.ceil(n / 3) - 1, 1);
+    const light = n <= 1 ? 62 : 72 - Math.floor(i / 3) * (24 / rows);
+    // (dash, marker) = (i mod 6, (i + floor(i/6)) mod 5): unique for i < 30.
+    return { color: `hsl(${hue} 78% ${light}%)`, dash: DASHES[i % DASHES.length],
+             marker: MARKERS[(i + Math.floor(i / DASHES.length)) % MARKERS.length] };
   };
   const shown = all.filter(s => !hidden.has(sid(s)));
   const toggle = (k: string) => { const n = new Set(hidden); if (n.has(k)) n.delete(k); else n.add(k); setHidden(n); };
@@ -180,7 +196,7 @@ export default function EffortChartPage() {
         <div className="chart-legend">
           {agents.map(a => (
             <div key={a} className="legend-group">
-              <div className="legend-agent" style={{ color: colorOf(a) }}>{a}</div>
+              <div className="legend-agent" style={{ color: `hsl(${hueOf(a)} 78% 62%)` }}>{a}</div>
               {all.filter(s => s.agent === a).map(s => {
                 const st = styleOf(s), off = hidden.has(sid(s));
                 return (
