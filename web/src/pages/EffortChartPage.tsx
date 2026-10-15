@@ -186,7 +186,7 @@ export default function EffortChartPage() {
       <div className="chart-controls">
         <label className="chk"><input type="checkbox" checked={logCost} onChange={e => setLogCost(e.target.checked)} /> log cost axis</label>
         <label className="chk"><input type="checkbox" checked={logTime} onChange={e => setLogTime(e.target.checked)} /> log time axis</label>
-        <span className="muted">Each line joins one agent + model across effort (L → M → H). Kiro credits priced at $0.02.</span>
+        <span className="muted">Each line joins one agent + model across effort (L → M → H). Credits priced at Kiro $0.02, Qoder CN ¥0.04, CodeBuddy CN ¥0.0495 (6.7 CNY/USD).</span>
       </div>
       <div className="chart-wrap">
         <div className="chart-pair">
