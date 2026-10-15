@@ -1,3 +1,4 @@
+import { CREDIT_PRICES, CREDIT_PRICE_NOTE, FX_CNY_PER_USD } from "../lib/pricing";
 import { useEffect, useState, type ReactNode } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { useNavigate } from "react-router-dom";
@@ -17,7 +18,7 @@ const durMin = (s: string) => {
   const g = (re: RegExp) => Number((s.match(re) || [0, 0])[1]);
   return g(/(\d+)h/) * 60 + g(/(\d+)m/) + g(/(\d+)s/) / 60;
 };
-const cost = (j: JobSummary) => j.cost_usd || j.credits * 0.02;
+const cost = (j: JobSummary) => j.cost_usd;
 const avgMin = (j: JobSummary) => j.agent_s && j.total ? j.agent_s / 60 / j.total : 0;
 const shortModel = (m: string) => m.replace(/^(global|us|eu|apac)\./, "").replace(/^(anthropic|openai)\./, "");
 const plainFail = (j: JobSummary) => Math.max(j.failed - j.timeouts - j.errors - (j.refused || 0), 0);
@@ -57,7 +58,7 @@ const COLUMNS: Col[] = [
   { id: "task_time", label: "Σ Task", center: true, filter: "range", unit: "min", value: j => Math.round(durMin(j.total_task_time)), render: j => j.total_task_time || "—", cls: "dim" },
   { id: "avg_task", label: "Avg/task", title: "Average agent time per task (minutes, excludes grading)", center: true, filter: "range", unit: "min",
     value: avgMin, render: j => avgMin(j) ? `${avgMin(j).toFixed(1)}m` : "—", cls: "dim mono" },
-  { id: "cost", label: "Cost", center: true, filter: "range", unit: "$", value: cost, render: j => cost(j) ? <>{`$${cost(j).toFixed(2)}`}{j.usage_missing ? <span className="warn-mark" title={`${j.usage_missing} trial(s) recorded no usage; their cost is not included`}> *</span> : null}</> : "—", cls: "dim nowrap" },
+  { id: "cost", label: "Cost", title: CREDIT_PRICE_NOTE, center: true, filter: "range", unit: "$", value: cost, render: j => cost(j) ? <>{`$${cost(j).toFixed(2)}`}{j.usage_missing ? <span className="warn-mark" title={`${j.usage_missing} trial(s) recorded no usage; their cost is not included`}> *</span> : null}</> : "—", cls: "dim nowrap" },
   { id: "credits", label: "Credits", center: true, filter: "range", value: j => j.credits, render: j => j.credits ? j.credits.toFixed(1) : "—", cls: "dim mono" },
   { id: "tok_in", label: "In tok", title: "Uncached input tokens", center: true, filter: "range", value: j => j.input_tokens, render: j => j.input_tokens || j.output_tokens ? fmtTok(j.input_tokens) : "—", cls: "dim mono" },
   { id: "tok_out", label: "Out tok", center: true, filter: "range", value: j => j.output_tokens, render: j => j.output_tokens ? fmtTok(j.output_tokens) : "—", cls: "dim mono" },
@@ -146,6 +147,10 @@ export default function DashboardPage() {
         <span>{sorted.length}/{jobs.length} jobs</span>
         <span>·</span>
         <span>{sorted.reduce((s, j) => s + j.total, 0)} tasks</span>
+        <span>·</span>
+        <span className="dim" title={CREDIT_PRICE_NOTE}>
+          Cost: {CREDIT_PRICES.map(p => `${p.label} ${p.price}`).join(" · ")} · CNY at {FX_CNY_PER_USD}/USD · others Bedrock token prices
+        </span>
       </div>
       {activeTags.length > 0 && (
         <div className="active-filters">

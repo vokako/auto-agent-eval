@@ -1,3 +1,4 @@
+import { CREDIT_PRICES, FX_CNY_PER_USD } from "../lib/pricing";
 import { useMemo, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -186,7 +187,7 @@ export default function EffortChartPage() {
       <div className="chart-controls">
         <label className="chk"><input type="checkbox" checked={logCost} onChange={e => setLogCost(e.target.checked)} /> log cost axis</label>
         <label className="chk"><input type="checkbox" checked={logTime} onChange={e => setLogTime(e.target.checked)} /> log time axis</label>
-        <span className="muted">Each line joins one agent + model across effort (L → M → H). Credits priced at Kiro $0.02, Qoder CN ¥0.04, CodeBuddy CN ¥0.0495 (6.7 CNY/USD).</span>
+        <span className="muted">Each line joins one agent + model across effort (L → M → H). Credits priced at {CREDIT_PRICES.map(p => `${p.label} ${p.price}`).join(", ")} ({FX_CNY_PER_USD} CNY/USD).</span>
       </div>
       <div className="chart-wrap">
         <div className="chart-pair">
