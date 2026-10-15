@@ -7,10 +7,10 @@ Task YAML (backend: agentcore):
     backend: agentcore
     task_list: tb2-fast30.txt          # tasks/<file>, one task name per line
     agentcore:
-      runner: ~/work/projects/agentcore-bench-runner
-      tasks_dir: ~/work/pocs/2026-09-28-agentcore-bench-runner/tb2   # Harbor task dirs
+      runner: $AAE_RUNNER              # agentcore-bench-runner checkout
+      tasks_dir: $AAE_TASKS_DIR        # Harbor task dirs
       mode: microvm                    # or instances
-      image: <registry>/bench/{task}:arm64
+      image: $AAE_IMAGE_REGISTRY/bench/{task}:arm64
       config: config.json              # runner config (relative to runner)
       jobs: 5
     agent:
@@ -18,6 +18,8 @@ Task YAML (backend: agentcore):
       model: global.anthropic.claude-sonnet-5-5
       effort: high
       model_region: us-east-2          # optional
+
+~ and $VARS are expanded in runner, tasks_dir and image; an unset variable is an error.
 
 Cost written into each trial is recomputed from tokens with the runner's
 benchmarks/pricing.json; kiro-cli reports credits instead.
@@ -32,8 +34,16 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
+def _expand_str(s: str) -> str:
+    """Expand ~ and $VARS; fail if a variable is unset instead of passing '$X' through."""
+    out = os.path.expandvars(os.path.expanduser(s))
+    if "$" in out:
+        raise SystemExit(f"agentcore config: unset environment variable in {s!r}")
+    return out
+
+
 def _expand(p: str) -> Path:
-    return Path(os.path.expanduser(p))
+    return Path(_expand_str(p))
 
 
 # Marker written to agent.txt when a trial has no usage data; the dashboard shows its cost as "—".
@@ -76,7 +86,7 @@ def run(cfg: dict, task_names: list[str], jobs_dir: Path) -> Path:
     raw.mkdir(parents=True, exist_ok=True)
     cmd = ["uv", "run", "-q", "--python", "3.12", "--with", "boto3", "python", "runner/batch.py",
            "--config", ac.get("config", "config.json"), "--mode", ac.get("mode", "microvm"),
-           "--image", ac["image"], "--harness", agent["name"], "--jobs", str(ac.get("jobs", 5)),
+           "--image", _expand_str(ac["image"]), "--harness", agent["name"], "--jobs", str(ac.get("jobs", 5)),
            "--out", str(raw)]
     for flag, key in (("--model", "model"), ("--effort", "effort"), ("--model-region", "model_region")):
         if agent.get(key):

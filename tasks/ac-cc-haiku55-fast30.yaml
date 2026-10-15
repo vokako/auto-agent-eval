@@ -2,10 +2,10 @@
 backend: agentcore
 task_list: tb2-fast30.txt
 agentcore:
-  runner: ~/work/projects/agentcore-bench-runner
-  tasks_dir: ~/work/pocs/2026-09-28-agentcore-bench-runner/tb2
+  runner: $AAE_RUNNER
+  tasks_dir: $AAE_TASKS_DIR
   mode: microvm
-  image: 236995464743.dkr.ecr.us-east-2.amazonaws.com/bench/{task}:arm64
+  image: $AAE_IMAGE_REGISTRY/bench/{task}:arm64
   config: config.json
   jobs: 5
 agent:

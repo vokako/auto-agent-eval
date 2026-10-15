@@ -51,12 +51,19 @@ harbor run -d terminal-bench/terminal-bench-2 \
 
 ### AgentCore（microVM 沙箱）
 
-任务配置里写 `backend: agentcore`，`aae run` 会调用 agentcore-bench-runner，再把结果写进 `jobs/`。配置格式见 `aae/agentcore.py` 顶部的说明。
+任务配置里写 `backend: agentcore`，`aae run` 会调用 agentcore-bench-runner，再把结果写进 `jobs/`。配置格式见 `aae/agentcore.py` 顶部的说明。`tasks/ac-*.yaml` 里和机器相关的部分从环境变量读，没设置会直接报错：
+
+```bash
+export AAE_RUNNER=~/agentcore-bench-runner          # agentcore-bench-runner 的 checkout
+export AAE_TASKS_DIR=~/tb2                          # Harbor 任务目录（每个任务一个子目录）
+export AAE_IMAGE_REGISTRY=<account>.dkr.ecr.<region>.amazonaws.com   # 任务镜像所在的 ECR
+aae run ac-kiro-sonnet55-fast30
+```
 
 如果直接用 agentcore-bench-runner 跑（例如它的 `scripts/sweep.sh`），跑完后同步到看板：
 
 ```bash
-.venv/bin/python scripts/sync_agentcore_jobs.py --runner <agentcore-bench-runner 路径>
+.venv/bin/python scripts/sync_agentcore_jobs.py --runner <agentcore-bench-runner 路径>   # 或设置 AAE_RUNNER
 ```
 
 同步脚本把同一个 agent + 模型 + effort 的多个批次（如 Fast30 和 Hard20）合并成一个 job，数据集记为 `tb2-50`。
@@ -80,6 +87,7 @@ AAE_TASK_DIRS=<任务源码目录> aae serve   # 可选：任务详情里显示 
 
 - Claude Code / Codex：按 token 数乘 Bedrock 价格重新计算（价格表在 agentcore-bench-runner 的 `benchmarks/pricing.json`），不用 harness 自报的数字。Codex 的 input token 含缓存部分，入库前减掉缓存，和 Claude Code 口径一致。
 - kiro-cli：只报 credit，按 $0.02/credit 换算。
+- Qoder CN：¥0.04/credit；CodeBuddy 国内版：¥0.0495/credit；人民币按 6.7 CNY/USD 换算。单价和来源都在 runner 的 `benchmarks/pricing.json`。
 
 ## LLM Judge（可选）
 

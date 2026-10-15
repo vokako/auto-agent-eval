@@ -1,6 +1,6 @@
 """Rebuild jobs/ac-<config>/ from agentcore-bench-runner's runs/.
 
-Usage: .venv/bin/python scripts/sync_agentcore_jobs.py [--runner ~/work/projects/agentcore-bench-runner]
+Usage: .venv/bin/python scripts/sync_agentcore_jobs.py [--runner <agentcore-bench-runner checkout>]   (default: $AAE_RUNNER)
 
 One job per harness + model + effort. The runner executes the 50-task suite as two batches
 (runs/fast30-<cfg> and runs/hard20-<cfg>); this script merges their trials into a single job
@@ -26,9 +26,12 @@ DATASET = "tb2-50"
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--runner", default="~/work/projects/agentcore-bench-runner")
+    ap.add_argument("--runner", default=os.environ.get("AAE_RUNNER"),
+                    help="agentcore-bench-runner checkout (default: $AAE_RUNNER)")
     ap.add_argument("--jobs", default="jobs")
     a = ap.parse_args()
+    if not a.runner:
+        ap.error("pass --runner or set AAE_RUNNER")
     runner = Path(os.path.expanduser(a.runner))
     jobs = Path(a.jobs)
     pricing = json.load(open(runner / "benchmarks" / "pricing.json"))
