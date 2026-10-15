@@ -12,9 +12,10 @@ import { LazyLog } from "../components/LazyLog";
 import { FileBrowser } from "../components/FileBrowser";
 import type { TaskDetail } from "../types";
 
-type Filter = "all" | "pass" | "fail" | "timeout" | "refused" | "error";
+type Filter = "all" | "pass" | "fail" | "timeout" | "refused" | "error" | "notrun";
 const REFUSAL = "ModelRefusal";
-const isErr = (e: string | null) => !!e && e !== "AgentTimeoutError" && e !== REFUSAL;
+const NOT_RUN = "NotRun";
+const isErr = (e: string | null) => !!e && e !== "AgentTimeoutError" && e !== REFUSAL && e !== NOT_RUN;
 type DetailTab = "info" | "files";
 
 export default function JobPage() {
@@ -29,7 +30,9 @@ export default function JobPage() {
 
   if (loading || !job) return <div className="loading">Loading…</div>;
 
-  const tasks = job.tasks;
+  // Trials that never reached the model (quota exhausted) are listed but not scored.
+  const notRun = job.tasks.filter(t => t.error_type === NOT_RUN).length;
+  const tasks = job.tasks.filter(t => t.error_type !== NOT_RUN);
   const pass = tasks.filter(t => t.passed).length;
   const fail = tasks.filter(t => !t.passed).length;
   const timeout = tasks.filter(t => t.error_type === "AgentTimeoutError").length;
@@ -47,7 +50,7 @@ export default function JobPage() {
     setTaskLoading(false);
   };
 
-  const filtered = tasks
+  const filtered = (filter === "notrun" ? job.tasks.filter(t => t.error_type === NOT_RUN) : tasks)
     .filter(t => {
       if (filter === "pass") return t.passed;
       if (filter === "fail") return !t.passed;
@@ -65,6 +68,7 @@ export default function JobPage() {
     timeout,
     refused,
     error: err,
+    notrun: notRun,
   };
 
   return (
@@ -105,6 +109,7 @@ export default function JobPage() {
           {timeout > 0 && <span className="legend-timeout">Timeout {timeout}</span>}
           {refused > 0 && <span className="legend-refused">Refused {refused}</span>}
           {err > 0 && <span className="legend-err">Error {err}</span>}
+          {notRun > 0 && <span className="legend-refused" title="Quota exhausted before any model call; not scored">Not run {notRun}</span>}
         </div>
       </div>
 
@@ -112,7 +117,7 @@ export default function JobPage() {
         <div className={`task-panel ${task ? "narrow" : ""}`}>
           <div className="panel-toolbar">
             <div className="tab-group">
-              {(["all", "pass", "fail", "timeout", "refused", "error"] as const).map(f => (
+              {(["all", "pass", "fail", "timeout", "refused", "error", "notrun"] as const).map(f => (
                 filterCounts[f] > 0 || f === "all" ? (
                   <button key={f} className={`tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
                     {f} ({filterCounts[f]})
@@ -149,6 +154,7 @@ export default function JobPage() {
                     <td>
                       {t.error_type === "AgentTimeoutError" && <span className="timeout-tag">Timeout</span>}
                       {t.error_type === REFUSAL && <span className="refused-tag">Refused</span>}
+                      {t.error_type === NOT_RUN && <span className="refused-tag" title="Account quota exhausted before any model call; not scored">Not run</span>}
                       {isErr(t.error_type) && <span className="err-tag">{(t.error_type ?? "").replace("Error", "")}</span>}
                     </td>
                   </tr>

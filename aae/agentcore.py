@@ -40,6 +40,8 @@ def _expand(p: str) -> Path:
 USAGE_MISSING = "# usage: not recorded"
 # Exception type for trials the model refused (safety filter); counted apart from failures.
 REFUSAL = "ModelRefusal"
+# Exception type for trials that never reached the model (account quota exhausted); not scored.
+NOT_RUN = "NotRun"
 
 # Runs before 2026-10-10 did not record the installed harness version. Those trials are backfilled with
 # the version the later trials recorded, so every job shows one definite version per harness.
@@ -121,6 +123,12 @@ def convert(results_jsonl: Path, out: Path, pricing: dict, agent: dict,
         if not s:
             exceptions.setdefault(r.get("status", "Error"), []).append(tid)
             (d / "agent" / "agent.txt").write_text(r.get("error", ""))
+            continue
+        if outcomes.get(r.get("run_id")) == "not_run":
+            # Quota exhausted before any model call: listed, but no result.json, so it carries no
+            # reward, cost or time and the dashboard leaves it out of the score.
+            exceptions.setdefault(NOT_RUN, []).append(tid)
+            (d / "agent" / "agent.txt").write_text("# not run: account quota exhausted before any model call\n")
             continue
         rewards.setdefault(f'{float(s.get("reward") or 0):.1f}', []).append(tid)
         variants.add(r.get("steering") or "")

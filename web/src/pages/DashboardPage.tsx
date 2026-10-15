@@ -51,6 +51,7 @@ const COLUMNS: Col[] = [
   { id: "fail", label: "Fail", center: true, filter: "range", value: plainFail, render: j => plainFail(j) || "—", cls: "mono" },
   { id: "timeouts", label: "Timeout", center: true, filter: "range", value: j => j.timeouts, render: j => j.timeouts || "—", cls: "mono" },
   { id: "refused", label: "Refused", title: "Model safety refusals (not counted as Fail)", center: true, filter: "range", value: j => j.refused || 0, render: j => j.refused || "—", cls: "mono" },
+  { id: "not_run", label: "Not run", title: "Quota exhausted before any model call (excluded from Tasks and the pass rate)", center: true, filter: "range", value: j => j.not_run || 0, render: j => j.not_run || "—", cls: "mono" },
   { id: "errors", label: "Error", center: true, filter: "range", value: j => j.errors, render: j => j.errors || "—", cls: "mono" },
   { id: "rate", label: "Rate", center: true, filter: "range", unit: "%", value: j => j.rate, render: j => <span className={`pill ${rateClass(j.rate)}`}>{j.rate}%</span> },
   { id: "task_time", label: "Σ Task", center: true, filter: "range", unit: "min", value: j => Math.round(durMin(j.total_task_time)), render: j => j.total_task_time || "—", cls: "dim" },

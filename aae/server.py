@@ -19,6 +19,8 @@ TASK_DIRS = [Path(os.path.expanduser(p)) for p in os.environ.get("AAE_TASK_DIRS"
 
 # Exception type the AgentCore converter uses for model safety refusals (aae/agentcore.py REFUSAL).
 REFUSAL = "ModelRefusal"
+# Trials that never reached the model (quota exhausted, aae/agentcore.py NOT_RUN): listed, not scored.
+NOT_RUN = "NotRun"
 
 app = FastAPI(title="AAE Dashboard")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -288,7 +290,8 @@ def list_jobs():
                 continue
             try:
                 parsed = _parse_result(rf)
-                tasks = parsed["tasks"]
+                not_run = sum(1 for t in parsed["tasks"].values() if t.get("error_type") == NOT_RUN)
+                tasks = {k: t for k, t in parsed["tasks"].items() if t.get("error_type") != NOT_RUN}
                 passed = sum(1 for t in tasks.values() if t["passed"])
                 total = len(tasks)
                 errors = sum(1 for t in tasks.values() if t.get("error_type"))
@@ -320,6 +323,7 @@ def list_jobs():
                     "errors": other_errors,
                     "timeouts": timeouts,
                     "refused": refused,
+                    "not_run": not_run,
                     "total": total,
                     "rate": round(passed / total * 100, 1) if total else 0,
                     "duration": _duration_str(started, finished),
@@ -674,7 +678,8 @@ def compare(ids: str):
     listed = {j["id"]: j for j in list_jobs()}
     summary = {}
     for jid in job_ids:
-        tasks = results.get(jid, {})
+        tasks = {k: t for k, t in results.get(jid, {}).items() if t.get("error_type") != NOT_RUN}
+        not_run = len(results.get(jid, {})) - len(tasks)
         passed = sum(1 for t in tasks.values() if t["passed"])
         total = len(tasks)
         timeouts = sum(1 for t in tasks.values() if t.get("error_type") == "AgentTimeoutError")
@@ -689,6 +694,7 @@ def compare(ids: str):
             "effort": j.get("effort", ""),
             "variant": j.get("variant", ""),
             "refused": refused,
+            "not_run": not_run,
             "cost_usd": j.get("cost_usd", 0),
             "credits": j.get("credits", 0),
             "agent_s": j.get("agent_s", 0),

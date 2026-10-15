@@ -15,6 +15,7 @@ export interface JobSummary {
   errors: number;
   timeouts: number;
   refused?: number;
+  not_run?: number;
   total: number;
   rate: number;
   duration: string;
@@ -87,5 +88,5 @@ export interface CompareResult {
 
 export interface CompareSummary {
   passed: number; failed: number; total: number; timeouts: number; errors: number; rate: number;
-  agent: string; model: string; effort?: string; variant?: string; refused?: number; cost_usd?: number; credits?: number; agent_s?: number;
+  agent: string; model: string; effort?: string; variant?: string; refused?: number; not_run?: number; cost_usd?: number; credits?: number; agent_s?: number;
 }

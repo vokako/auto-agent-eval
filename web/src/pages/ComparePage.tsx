@@ -47,6 +47,7 @@ export default function ComparePage() {
                 <span className="legend-fail">Fail {s.failed - s.timeouts - s.errors - (s.refused || 0)}</span>
                 {s.timeouts > 0 && <span className="legend-timeout">Timeout {s.timeouts}</span>}
                 {(s.refused || 0) > 0 && <span className="legend-refused">Refused {s.refused}</span>}
+                {(s.not_run || 0) > 0 && <span className="legend-refused">Not run {s.not_run}</span>}
                 {s.errors > 0 && <span className="legend-err">Error {s.errors}</span>}
               </div>
             </div>
@@ -76,8 +77,9 @@ export default function ComparePage() {
                 const label = v.passed ? "✓" :
                   v.error_type === "AgentTimeoutError" ? "✗ timeout" :
                   v.error_type === "ModelRefusal" ? "✗ refused" :
+                  v.error_type === "NotRun" ? "— not run" :
                   v.error_type ? "✗ error" : "✗";
-                return <td key={jid} className={`c ${v.passed ? "cell-pass" : v.error_type ? "cell-err" : "cell-fail"}`}>{label}</td>;
+                return <td key={jid} className={`c ${v.passed ? "cell-pass" : v.error_type === "NotRun" ? "dim" : v.error_type ? "cell-err" : "cell-fail"}`}>{label}</td>;
               })}
             </tr>
           );
