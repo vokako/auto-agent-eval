@@ -7,7 +7,6 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -85,6 +84,15 @@ def cmd_run(args):
     agent_cfg = cfg.get("agent", {})
 
     jobs_dir = str(PROJECT_ROOT / "jobs" / args.task)
+    if cfg.get("backend") == "agentcore":
+        from aae import agentcore
+        print(f"Running: {args.task} (AgentCore {cfg['agentcore'].get('mode', 'microvm')})")
+        print(f"  agent:   {agent_cfg.get('name')} / {agent_cfg.get('model')} / effort {agent_cfg.get('effort', 'default')}")
+        job_dir = agentcore.run(cfg, _load_task_list(cfg["task_list"]), Path(jobs_dir))
+        import shutil
+        shutil.copy2(PROJECT_ROOT / "tasks" / f"{args.task}.yaml", job_dir / "task.yaml")
+        print(f"  results: {job_dir}")
+        return
     cmd = _build_harbor_command(cfg, jobs_dir)
 
     print(f"Running: {args.task}")
@@ -298,8 +306,8 @@ def _save_results(results: RunEvalResult, path: Path):
 
 def cmd_serve(args):
     import uvicorn
-    print(f"Starting AAE dashboard on http://0.0.0.0:{args.port}")
-    uvicorn.run("aae.server:app", host="0.0.0.0", port=args.port, reload=args.reload)
+    print(f"Starting AAE dashboard on http://{args.host}:{args.port}")
+    uvicorn.run("aae.server:app", host=args.host, port=args.port, reload=args.reload)
 
 
 def main():
@@ -333,6 +341,8 @@ def main():
 
     p_serve = sub.add_parser("serve", help="Start web dashboard")
     p_serve.add_argument("-p", "--port", type=int, default=8080)
+    p_serve.add_argument("--host", default="127.0.0.1",
+                         help="Bind address (default 127.0.0.1; use 0.0.0.0 only behind an access-controlled proxy)")
     p_serve.add_argument("--reload", action="store_true")
     p_serve.set_defaults(func=cmd_serve)
 

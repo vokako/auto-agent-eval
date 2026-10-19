@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AppHeader } from "../components/AppHeader";
 import { useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { fmtTime, rateClass } from "../lib/format";
@@ -11,7 +12,10 @@ import { LazyLog } from "../components/LazyLog";
 import { FileBrowser } from "../components/FileBrowser";
 import type { TaskDetail } from "../types";
 
-type Filter = "all" | "pass" | "fail" | "timeout" | "error";
+type Filter = "all" | "pass" | "fail" | "timeout" | "refused" | "error" | "notrun";
+const REFUSAL = "ModelRefusal";
+const NOT_RUN = "NotRun";
+const isErr = (e: string | null) => !!e && e !== "AgentTimeoutError" && e !== REFUSAL && e !== NOT_RUN;
 type DetailTab = "info" | "files";
 
 export default function JobPage() {
@@ -26,11 +30,14 @@ export default function JobPage() {
 
   if (loading || !job) return <div className="loading">Loading…</div>;
 
-  const tasks = job.tasks;
+  // Trials that never reached the model (quota exhausted) are listed but not scored.
+  const notRun = job.tasks.filter(t => t.error_type === NOT_RUN).length;
+  const tasks = job.tasks.filter(t => t.error_type !== NOT_RUN);
   const pass = tasks.filter(t => t.passed).length;
   const fail = tasks.filter(t => !t.passed).length;
   const timeout = tasks.filter(t => t.error_type === "AgentTimeoutError").length;
-  const err = tasks.filter(t => t.error_type && t.error_type !== "AgentTimeoutError").length;
+  const refused = tasks.filter(t => t.error_type === REFUSAL).length;
+  const err = tasks.filter(t => isErr(t.error_type)).length;
   const rate = tasks.length ? pass / tasks.length * 100 : 0;
   const totalTests = tasks.reduce((s, t) => s + t.tests_total, 0);
   const passedTests = tasks.reduce((s, t) => s + t.tests_passed, 0);
@@ -43,12 +50,13 @@ export default function JobPage() {
     setTaskLoading(false);
   };
 
-  const filtered = tasks
+  const filtered = (filter === "notrun" ? job.tasks.filter(t => t.error_type === NOT_RUN) : tasks)
     .filter(t => {
       if (filter === "pass") return t.passed;
       if (filter === "fail") return !t.passed;
       if (filter === "timeout") return t.error_type === "AgentTimeoutError";
-      if (filter === "error") return t.error_type && t.error_type !== "AgentTimeoutError";
+      if (filter === "refused") return t.error_type === REFUSAL;
+      if (filter === "error") return isErr(t.error_type);
       return true;
     })
     .filter(t => !search || t.name.includes(search));
@@ -58,17 +66,14 @@ export default function JobPage() {
     pass,
     fail,
     timeout,
+    refused,
     error: err,
+    notrun: notRun,
   };
 
   return (
     <>
-      <header>
-        <h1 onClick={() => window.location.href = "/"}>🧪 AAE — Agent Auto Eval</h1>
-        <a href="https://github.com/vokako/auto-agent-eval" target="_blank" rel="noopener" className="github-link" title="GitHub">
-          <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        </a>
-      </header>
+      <AppHeader />
       <div className="job-header-card">
         <div className="job-header-top">
           <Breadcrumb items={[{ label: "Jobs", to: "/" }, { label: config! }]} />
@@ -79,7 +84,9 @@ export default function JobPage() {
         </div>
         <div className="job-header-main">
           <div className="job-header-left">
-            <h2>{job.agent || "—"} <span className="dim">/ {job.model || "?"}</span></h2>
+            <h2>{job.agent || "—"} <span className="dim">/ {job.model || "?"}</span>
+              {job.effort && <span className="effort-tag">effort {job.effort}</span>}
+              {job.variant && <span className="effort-tag">{job.variant}</span>}</h2>
             <span className="dim">{job.dataset || ""}</span>
           </div>
           <div className="job-header-stats">
@@ -87,18 +94,22 @@ export default function JobPage() {
               <div className="stat-value"><span className={`pill ${rateClass(rate)}`}>{rate.toFixed(1)}%</span></div>
               <div className="stat-label">Task Pass <span className="info-sub">{pass}/{tasks.length}</span></div>
             </div>
-            <div className="stat-block">
-              <div className="stat-value"><span className={`pill ${rateClass(testRate)}`}>{testRate.toFixed(1)}%</span></div>
-              <div className="stat-label">Test Pass <span className="info-sub">{passedTests}/{totalTests}</span></div>
-            </div>
+            {totalTests > 0 && (
+              <div className="stat-block">
+                <div className="stat-value"><span className={`pill ${rateClass(testRate)}`}>{testRate.toFixed(1)}%</span></div>
+                <div className="stat-label">Test Pass <span className="info-sub">{passedTests}/{totalTests}</span></div>
+              </div>
+            )}
           </div>
         </div>
-        <ResultBar pass={pass} fail={fail - timeout - err} error={err + timeout} />
+        <ResultBar pass={pass} fail={fail - timeout - err - refused} error={err + timeout + refused} />
         <div className="result-legend">
           <span className="legend-pass">Pass {pass}</span>
-          <span className="legend-fail">Fail {fail - timeout - err}</span>
+          <span className="legend-fail">Fail {fail - timeout - err - refused}</span>
           {timeout > 0 && <span className="legend-timeout">Timeout {timeout}</span>}
+          {refused > 0 && <span className="legend-refused">Refused {refused}</span>}
           {err > 0 && <span className="legend-err">Error {err}</span>}
+          {notRun > 0 && <span className="legend-refused" title="Quota exhausted before any model call; not scored">Not run {notRun}</span>}
         </div>
       </div>
 
@@ -106,7 +117,7 @@ export default function JobPage() {
         <div className={`task-panel ${task ? "narrow" : ""}`}>
           <div className="panel-toolbar">
             <div className="tab-group">
-              {(["all", "pass", "fail", "timeout", "error"] as const).map(f => (
+              {(["all", "pass", "fail", "timeout", "refused", "error", "notrun"] as const).map(f => (
                 filterCounts[f] > 0 || f === "all" ? (
                   <button key={f} className={`tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
                     {f} ({filterCounts[f]})
@@ -122,7 +133,7 @@ export default function JobPage() {
                 <th style={{width:28}}></th>
                 <th>Task</th>
                 <th className="r">Time</th>
-                <th className="r">Tests</th>
+                {totalTests > 0 && <th className="r">Tests</th>}
                 <th className="r">Cost</th>
                 <th>Note</th>
               </tr></thead>
@@ -132,17 +143,19 @@ export default function JobPage() {
                     <td><span className={`icon ${t.passed ? "pass" : "fail"}`}>{t.passed ? "✓" : "✗"}</span></td>
                     <td className="task-name-cell">{t.name}</td>
                     <td className="r dim mono">{t.duration || "—"}</td>
-                    <td className="r mono">
+                    {totalTests > 0 && <td className="r mono">
                       {t.tests_total > 0 ? (
                         <span className={t.tests_passed === t.tests_total ? "tc-all-pass" : t.tests_passed > 0 ? "tc-partial" : "tc-none"}>
                           {t.tests_passed}/{t.tests_total}
                         </span>
                       ) : "—"}
-                    </td>
-                    <td className="r">{t.cost ? <span className="cost-tag">{t.cost}</span> : "—"}</td>
+                    </td>}
+                    <td className="r">{t.cost ? <span className="cost-tag">{t.cost}</span> : <span className="dim" title="Usage not recorded for this trial">—</span>}</td>
                     <td>
                       {t.error_type === "AgentTimeoutError" && <span className="timeout-tag">Timeout</span>}
-                      {t.error_type && t.error_type !== "AgentTimeoutError" && <span className="err-tag">{t.error_type.replace("Error", "")}</span>}
+                      {t.error_type === REFUSAL && <span className="refused-tag">Refused</span>}
+                      {t.error_type === NOT_RUN && <span className="refused-tag" title="Account quota exhausted before any model call; not scored">Not run</span>}
+                      {isErr(t.error_type) && <span className="err-tag">{(t.error_type ?? "").replace("Error", "")}</span>}
                     </td>
                   </tr>
                 ))}
@@ -162,7 +175,7 @@ export default function JobPage() {
               </div>
             </div>
             {taskLoading ? <div className="loading">Loading…</div> : detailTab === "files" ? (
-              <FileBrowser jobId={jobId} taskName={task.name} />
+              <FileBrowser key={`${jobId}/${task.name}`} jobId={jobId} taskName={task.name} />
             ) : (
               <div className="detail-tabs">
                 {task.test_cases.length > 0 && (

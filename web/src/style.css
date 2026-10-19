@@ -62,6 +62,9 @@ h1:hover { color: var(--blue); }
 .col-filter-range { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); }
 .col-filter-range input[type="range"] { flex: 1; accent-color: var(--blue); }
 .col-filter-range button { background: none; border: none; color: var(--blue); cursor: pointer; font-size: 11px; }
+.col-filter-minmax { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
+.col-filter-minmax input { width: 72px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; color: var(--text); padding: 3px 6px; font-size: 12px; }
+.col-picker { margin-left: 0; }
 
 /* Pills & Tags */
 .pill { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.2px; }
@@ -71,6 +74,7 @@ h1:hover { color: var(--blue); }
 .adapter-tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
 .adapter-tag.built-in { background: var(--blue-bg); color: var(--blue); }
 .adapter-tag.custom { background: rgba(167,139,250,0.1); color: var(--purple); }
+.adapter-tag.agentcore { background: var(--green-bg); color: var(--green); white-space: nowrap; }
 .ver-tag { font-size: 11px; color: var(--muted); margin-left: 6px; }
 .status-running { color: var(--yellow); font-size: 12px; font-weight: 500; animation: pulse 2s infinite; }
 .status-done { color: var(--green); font-size: 12px; }
@@ -248,3 +252,26 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); transition: bac
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+
+/* Effort chart */
+.chart-controls { display: flex; align-items: center; gap: 18px; margin: 12px 0 16px; font-size: 12px; color: var(--dim); }
+.chart-controls label { display: flex; align-items: center; gap: 6px; }
+.chart-controls select { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; }
+.chart-controls .chk input { accent-color: var(--blue); }
+.chart-wrap { display: flex; gap: 20px; align-items: flex-start; }
+.effort-chart { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.chart-legend { width: 220px; display: flex; flex-direction: column; gap: 14px; font-size: 12px; }
+.legend-agent { font-weight: 600; margin-bottom: 4px; }
+.legend-item { display: flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+.legend-item:hover { background: var(--surface2); }
+.legend-item.off { opacity: 0.35; }
+.chart-pair { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 16px; }
+.score-chart-title { font-size: 13px; font-weight: 600; margin: 0 0 6px 4px; color: var(--text); }
+
+/* nowrap cells, effort tag, compare meta, warn mark */
+td.nowrap { white-space: nowrap; }
+.effort-tag { font-size: 11px; font-weight: 500; color: var(--blue); background: rgba(96,165,250,0.1); padding: 2px 8px; border-radius: 4px; margin-left: 10px; vertical-align: middle; }
+.cmp-meta { display: flex; gap: 10px; color: var(--dim); font-size: 12px; margin-top: 4px; }
+.warn-mark { color: var(--yellow); cursor: help; }
+.legend-refused { color: var(--purple); }
+.refused-tag { font-size: 10px; color: var(--purple); background: rgba(167,139,250,0.1); padding: 2px 6px; border-radius: 4px; }

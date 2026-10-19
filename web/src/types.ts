@@ -4,6 +4,9 @@ export interface JobSummary {
   started_at: string;
   agent: string;
   model: string;
+  effort: string;
+  variant?: string;
+  mode: string;
   adapter: string;
   version: string;
   dataset: string;
@@ -11,6 +14,8 @@ export interface JobSummary {
   failed: number;
   errors: number;
   timeouts: number;
+  refused?: number;
+  not_run?: number;
   total: number;
   rate: number;
   duration: string;
@@ -21,6 +26,8 @@ export interface JobSummary {
   output_tokens: number;
   cache_read: number;
   cache_write: number;
+  usage_missing?: number;
+  agent_s?: number;
   finished: boolean;
   status: string;
   n_total: number;
@@ -46,6 +53,8 @@ export interface JobDetail {
   model: string;
   adapter: string;
   version: string;
+  effort?: string;
+  variant?: string;
   dataset: string;
   tasks: TaskResult[];
   started_at: string;
@@ -74,5 +83,10 @@ export interface CompareRow {
 export interface CompareResult {
   jobs: string[];
   tasks: CompareRow[];
-  summary: Record<string, { passed: number; failed: number; total: number; timeouts: number; errors: number; rate: number; agent: string; model: string }>;
+  summary: Record<string, CompareSummary>;
+}
+
+export interface CompareSummary {
+  passed: number; failed: number; total: number; timeouts: number; errors: number; rate: number;
+  agent: string; model: string; effort?: string; variant?: string; refused?: number; not_run?: number; cost_usd?: number; credits?: number; agent_s?: number;
 }

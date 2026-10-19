@@ -1,17 +1,23 @@
 import { useState, useEffect } from "react";
 
+/**
+ * Fetch on mount and whenever `deps` change. Responses for superseded deps are dropped, so a slow
+ * earlier request can never overwrite a newer one.
+ */
 export function useFetch<T>(fetcher: () => Promise<T>, deps: unknown[] = []) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const key = JSON.stringify(deps);
+  const [state, setState] = useState<{ key: string | null; data: T | null; error: string | null }>(
+    { key: null, data: null, error: null });
 
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
     fetcher()
-      .then(d => { setData(d); setError(null); })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
-  }, deps);
+      .then(d => { if (!cancelled) setState({ key, data: d, error: null }); })
+      .catch(e => { if (!cancelled) setState({ key, data: null, error: e instanceof Error ? e.message : String(e) }); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callers list the inputs of `fetcher` in `deps`
+  }, [key]);
 
-  return { data, loading, error };
+  const fresh = state.key === key;
+  return { data: fresh ? state.data : null, loading: !fresh, error: fresh ? state.error : null };
 }

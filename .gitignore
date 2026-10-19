@@ -9,9 +9,9 @@ build/
 .cache/
 node_modules/
 temp/
-uv.lock
 agents/*/bin/
 datasets/
 jobs/
 .archive/
 reports/
+.kiro/

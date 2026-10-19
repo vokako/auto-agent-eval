@@ -10,14 +10,28 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 JOBS_DIR = PROJECT_ROOT / "jobs"
 HARBOR_CACHE = Path(os.path.expanduser("~/.cache/harbor/tasks/packages/terminal-bench"))
+# Extra task source roots (colon-separated) searched for <task>/instruction.md, e.g. a Terminal-Bench checkout.
+TASK_DIRS = [Path(os.path.expanduser(p)) for p in os.environ.get("AAE_TASK_DIRS", "").split(":") if p]
+
+# Exception type the AgentCore converter uses for model safety refusals (aae/agentcore.py REFUSAL).
+REFUSAL = "ModelRefusal"
+# Trials that never reached the model (quota exhausted, aae/agentcore.py NOT_RUN): listed, not scored.
+NOT_RUN = "NotRun"
 
 app = FastAPI(title="AAE Dashboard")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+def _job_dir(config: str, timestamp: str) -> Path:
+    """Resolve jobs/<config>/<timestamp>, refusing anything that escapes JOBS_DIR."""
+    d = (JOBS_DIR / config / timestamp).resolve()
+    if not d.is_relative_to(JOBS_DIR.resolve()) or d == JOBS_DIR.resolve():
+        raise HTTPException(404, "Job not found")
+    return d
 
 
 def _ensure_utc(ts: str | None) -> str | None:
@@ -79,6 +93,23 @@ def _read_agent_info(job_dir: Path) -> tuple[str, str]:
     except Exception:
         pass
     return "", ""
+
+
+def _read_run_cfg(job_dir: Path) -> dict:
+    """effort / mode / adapter from config.json (written by the AgentCore backend; empty for Harbor jobs)."""
+    out = {"effort": "", "mode": "", "adapter": "", "version": "", "variant": ""}
+    try:
+        cfg = json.load(open(job_dir / "config.json"))
+        a = (cfg.get("agents") or [{}])[0]
+        out["effort"] = a.get("effort") or ""
+        out["mode"] = a.get("mode") or ""
+        out["version"] = a.get("version") or ""
+        out["variant"] = a.get("variant") or ""
+        if cfg.get("backend") == "agentcore":
+            out["adapter"] = f'agentcore {out["mode"]}'.strip()
+    except Exception:
+        pass
+    return out
 
 
 def _agent_extra(job_dir: Path) -> dict:
@@ -147,9 +178,9 @@ def _duration_str(started: str | None, finished: str | None) -> str:
         return ""
 
 
-def _sum_trial_durations(job_dir: Path) -> str:
-    """Sum individual trial durations (agent actual work time)."""
-    total_secs = 0
+def _trial_seconds(job_dir: Path, agent_only: bool = False) -> float:
+    """Sum trial durations in seconds. agent_only uses Harbor's agent_execution span when present."""
+    total_secs = 0.0
     for d in job_dir.iterdir():
         if not d.is_dir() or "__" not in d.name:
             continue
@@ -158,11 +189,18 @@ def _sum_trial_durations(job_dir: Path) -> str:
             continue
         try:
             t = json.load(open(rf))
-            s = datetime.fromisoformat(t["started_at"].replace("Z", "+00:00"))
-            e = datetime.fromisoformat(t["finished_at"].replace("Z", "+00:00"))
+            span = t.get("agent_execution") if agent_only and t.get("agent_execution") else t
+            s = datetime.fromisoformat(span["started_at"].replace("Z", "+00:00"))
+            e = datetime.fromisoformat(span["finished_at"].replace("Z", "+00:00"))
             total_secs += (e - s).total_seconds()
         except Exception:
             continue
+    return total_secs
+
+
+def _sum_trial_durations(job_dir: Path) -> str:
+    """Sum individual trial durations (agent actual work time)."""
+    total_secs = _trial_seconds(job_dir)
     if total_secs == 0:
         return ""
     hours, rem = divmod(int(total_secs), 3600)
@@ -182,6 +220,7 @@ def _sum_job_cost(job_dir: Path) -> dict:
     output_tokens = 0
     cache_read = 0
     cache_write = 0
+    usage_missing = 0
     for d in job_dir.iterdir():
         if not d.is_dir() or "__" not in d.name:
             continue
@@ -193,6 +232,8 @@ def _sum_job_cost(job_dir: Path) -> dict:
                 continue
             try:
                 text = f.read_text(errors="ignore")
+                if "# usage: not recorded" in text:
+                    usage_missing += 1
                 for line in text.splitlines():
                     if '"total_cost_usd"' in line:
                         try:
@@ -214,7 +255,7 @@ def _sum_job_cost(job_dir: Path) -> dict:
     return {
         "cost_usd": round(cost_usd, 4), "credits": round(credits, 2),
         "input_tokens": input_tokens, "output_tokens": output_tokens,
-        "cache_read": cache_read, "cache_write": cache_write,
+        "cache_read": cache_read, "cache_write": cache_write, "usage_missing": usage_missing,
     }
 
 
@@ -249,18 +290,21 @@ def list_jobs():
                 continue
             try:
                 parsed = _parse_result(rf)
-                tasks = parsed["tasks"]
+                not_run = sum(1 for t in parsed["tasks"].values() if t.get("error_type") == NOT_RUN)
+                tasks = {k: t for k, t in parsed["tasks"].items() if t.get("error_type") != NOT_RUN}
                 passed = sum(1 for t in tasks.values() if t["passed"])
                 total = len(tasks)
                 errors = sum(1 for t in tasks.values() if t.get("error_type"))
                 timeouts = sum(1 for t in tasks.values() if t.get("error_type") == "AgentTimeoutError")
-                other_errors = errors - timeouts
-                verified = total - sum(1 for t in tasks.values() if t.get("error_type") and not t["passed"] and t["reward"] == 0.0 and "reward" not in t.get("error_type", "").lower())
+                refused = sum(1 for t in tasks.values() if t.get("error_type") == REFUSAL)
+                other_errors = errors - timeouts - refused
                 agent_name, model_name = _read_agent_info(job_dir)
                 extra = _agent_extra(job_dir)
+                run_cfg = _read_run_cfg(job_dir)
                 started = parsed.get("started_at")
                 finished = parsed.get("finished_at")
-                cost = _sum_job_cost(job_dir) if finished else {"cost_usd": 0, "credits": 0}
+                cost = _sum_job_cost(job_dir) if finished else {"cost_usd": 0, "credits": 0, "input_tokens": 0,
+                                                                "output_tokens": 0, "cache_read": 0, "cache_write": 0}
 
                 jobs.append({
                     "id": f"{config_dir.name}/{job_dir.name}",
@@ -268,23 +312,30 @@ def list_jobs():
                     "started_at": started,
                     "agent": agent_name,
                     "model": model_name,
-                    "adapter": "built-in" if extra["builtin"] else "custom",
-                    "version": extra["version"],
+                    "effort": run_cfg["effort"],
+                    "variant": run_cfg["variant"],
+                    "mode": run_cfg["mode"],
+                    "adapter": run_cfg["adapter"] or ("built-in" if extra["builtin"] else "custom"),
+                    "version": run_cfg["version"] or extra["version"],
                     "dataset": extra["dataset"],
                     "passed": passed,
                     "failed": total - passed,
                     "errors": other_errors,
                     "timeouts": timeouts,
+                    "refused": refused,
+                    "not_run": not_run,
                     "total": total,
                     "rate": round(passed / total * 100, 1) if total else 0,
                     "duration": _duration_str(started, finished),
                     "total_task_time": _sum_trial_durations(job_dir),
+                    "agent_s": round(_trial_seconds(job_dir, agent_only=True)),
                     "cost_usd": cost["cost_usd"],
                     "credits": cost["credits"],
                     "input_tokens": cost["input_tokens"],
                     "output_tokens": cost["output_tokens"],
                     "cache_read": cost["cache_read"],
                     "cache_write": cost["cache_write"],
+                    "usage_missing": cost.get("usage_missing", 0),
                     "finished": finished is not None,
                     "status": "done" if finished else "running",
                     "n_total": parsed.get("n_total", 0),
@@ -298,6 +349,31 @@ def list_jobs():
 
 
 CACHE_DIR = PROJECT_ROOT / "jobs" / ".cache"
+
+
+_EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
+
+@app.get("/api/effort-curves")
+def effort_curves():
+    """Per (agent, model): pass / cost / agent time at each effort level.
+
+    Built from the same per-job totals as /api/jobs (all trials in the job), so the dashboard
+    never needs to know how the test client grouped tasks. A job without an effort (a model that
+    takes none, e.g. kiro's "auto") is a single point at effort "default".
+    """
+    series: dict[tuple, dict] = {}
+    for j in list_jobs():
+        if not j.get("finished"):
+            continue
+        key = (j["agent"] or "", j["model"] or "", j.get("variant") or "")
+        s = series.setdefault(key, {"agent": key[0], "model": key[1], "variant": key[2],
+                                    "version": j.get("version") or "", "points": []})
+        s["points"].append({"effort": j.get("effort") or "default", "job": j["id"], "tasks": j["total"], "passed": j["passed"],
+                            "cost_usd": j["cost_usd"], "credits": j["credits"], "agent_s": j["agent_s"]})
+    for s in series.values():
+        s["points"].sort(key=lambda p: _EFFORT_ORDER.index(p["effort"]) if p["effort"] in _EFFORT_ORDER else 99)
+    return {"efforts": _EFFORT_ORDER, "series": sorted(series.values(), key=lambda s: (s["agent"], s["model"], s["variant"]))}
 
 
 def _get_cached_job(job_dir: Path) -> dict | None:
@@ -330,7 +406,7 @@ def _set_cached_job(job_dir: Path, data: dict):
 
 @app.get("/api/jobs/{config}/{timestamp}")
 def get_job(config: str, timestamp: str):
-    job_dir = JOBS_DIR / config / timestamp
+    job_dir = _job_dir(config, timestamp)
     rf = job_dir / "result.json"
     if not rf.exists():
         raise HTTPException(404, "Job not found")
@@ -344,6 +420,7 @@ def get_job(config: str, timestamp: str):
     tasks = parsed["tasks"]
     agent_name, model_name = _read_agent_info(job_dir)
     extra = _agent_extra(job_dir)
+    run_cfg = _read_run_cfg(job_dir)
 
     task_list = []
     for name in sorted(tasks):
@@ -432,8 +509,10 @@ def get_job(config: str, timestamp: str):
         "timestamp": timestamp,
         "agent": agent_name,
         "model": model_name,
-        "adapter": "built-in" if extra["builtin"] else "custom",
-        "version": extra["version"],
+        "adapter": run_cfg["adapter"] or ("built-in" if extra["builtin"] else "custom"),
+        "version": run_cfg["version"] or extra["version"],
+        "effort": run_cfg["effort"],
+        "variant": run_cfg["variant"],
         "dataset": extra["dataset"],
         "tasks": task_list,
         "started_at": parsed.get("started_at"),
@@ -452,7 +531,7 @@ def get_job(config: str, timestamp: str):
 @app.get("/api/jobs/{config}/{timestamp}/tasks/{task_name}/files")
 def get_task_files(config: str, timestamp: str, task_name: str):
     """List all files in a trial directory as a tree."""
-    job_dir = JOBS_DIR / config / timestamp
+    job_dir = _job_dir(config, timestamp)
     trial_dir = _find_trial(job_dir, task_name)
     if not trial_dir:
         raise HTTPException(404, "Task not found")
@@ -469,7 +548,7 @@ def get_task_files(config: str, timestamp: str, task_name: str):
 @app.get("/api/jobs/{config}/{timestamp}/tasks/{task_name}/files/{file_path:path}")
 def get_task_file(config: str, timestamp: str, task_name: str, file_path: str):
     """Read a file from a trial directory."""
-    job_dir = JOBS_DIR / config / timestamp
+    job_dir = _job_dir(config, timestamp)
     trial_dir = _find_trial(job_dir, task_name)
     if not trial_dir:
         raise HTTPException(404, "Task not found")
@@ -497,7 +576,7 @@ def _find_trial(job_dir: Path, task_name: str) -> Path | None:
 
 @app.get("/api/jobs/{config}/{timestamp}/tasks/{task_name}")
 def get_task(config: str, timestamp: str, task_name: str):
-    job_dir = JOBS_DIR / config / timestamp
+    job_dir = _job_dir(config, timestamp)
 
     trial_dir = _find_trial(job_dir, task_name)
     if not trial_dir:
@@ -505,12 +584,16 @@ def get_task(config: str, timestamp: str, task_name: str):
 
     # Instruction
     instruction = ""
-    task_cache = HARBOR_CACHE / task_name
-    if task_cache.exists():
-        for root, dirs, files in os.walk(task_cache):
+    for root_dir in [HARBOR_CACHE, *TASK_DIRS]:
+        task_root = root_dir / task_name
+        if not task_root.exists():
+            continue
+        for root, _dirs, files in os.walk(task_root):
             if "instruction.md" in files:
                 instruction = (Path(root) / "instruction.md").read_text(errors="ignore")
                 break
+        if instruction:
+            break
 
     # Test cases from ctrf.json
     test_cases = []
@@ -536,7 +619,7 @@ def get_task(config: str, timestamp: str, task_name: str):
 
 @app.get("/api/jobs/{config}/{timestamp}/tasks/{task_name}/logs/{log_type}")
 def get_task_log(config: str, timestamp: str, task_name: str, log_type: str):
-    job_dir = JOBS_DIR / config / timestamp
+    job_dir = _job_dir(config, timestamp)
 
     trial_dir = _find_trial(job_dir, task_name)
     if not trial_dir:
@@ -573,7 +656,10 @@ def compare(ids: str):
         parts = jid.split("/")
         if len(parts) != 2:
             continue
-        rf = JOBS_DIR / parts[0] / parts[1] / "result.json"
+        try:
+            rf = _job_dir(parts[0], parts[1]) / "result.json"
+        except HTTPException:
+            continue
         if rf.exists():
             results[jid] = _parse_result(rf)["tasks"]
 
@@ -589,18 +675,29 @@ def compare(ids: str):
             row[jid] = {"passed": t["passed"], "error_type": t.get("error_type")} if t else None
         rows.append(row)
 
+    listed = {j["id"]: j for j in list_jobs()}
     summary = {}
     for jid in job_ids:
-        tasks = results.get(jid, {})
+        tasks = {k: t for k, t in results.get(jid, {}).items() if t.get("error_type") != NOT_RUN}
+        not_run = len(results.get(jid, {})) - len(tasks)
         passed = sum(1 for t in tasks.values() if t["passed"])
         total = len(tasks)
         timeouts = sum(1 for t in tasks.values() if t.get("error_type") == "AgentTimeoutError")
-        errors = sum(1 for t in tasks.values() if t.get("error_type") and t.get("error_type") != "AgentTimeoutError")
+        refused = sum(1 for t in tasks.values() if t.get("error_type") == REFUSAL)
+        errors = sum(1 for t in tasks.values() if t.get("error_type") not in (None, "AgentTimeoutError", REFUSAL))
         # Read agent/model info
         parts = jid.split("/")
-        job_dir = JOBS_DIR / parts[0] / parts[1]
+        job_dir = _job_dir(parts[0], parts[1])
         agent_name, model_name = _read_agent_info(job_dir)
+        j = listed.get(jid, {})
         summary[jid] = {
+            "effort": j.get("effort", ""),
+            "variant": j.get("variant", ""),
+            "refused": refused,
+            "not_run": not_run,
+            "cost_usd": j.get("cost_usd", 0),
+            "credits": j.get("credits", 0),
+            "agent_s": j.get("agent_s", 0),
             "passed": passed,
             "failed": total - passed,
             "total": total,
@@ -619,7 +716,9 @@ DIST_DIR = PROJECT_ROOT / "web" / "dist"
 if DIST_DIR.exists():
     @app.get("/{path:path}")
     async def serve_spa(path: str):
-        file_path = DIST_DIR / path
-        if file_path.is_file():
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(404, "Not found")
+        file_path = (DIST_DIR / path).resolve()
+        if file_path.is_relative_to(DIST_DIR.resolve()) and file_path.is_file():
             return FileResponse(file_path)
         return FileResponse(DIST_DIR / "index.html")

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BASE } from "../lib/api";
 
 interface Props {
   title: string;
@@ -12,7 +13,6 @@ export function LazyLog({ title, jobId, taskName, logType, defaultOpen }: Props)
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const BASE = import.meta.env.DEV ? "http://localhost:8080" : "";
 
   const load = async () => {
     if (content !== null) return;

@@ -94,7 +94,7 @@ def load_instruction(job_dir: Path, task_id: str) -> str:
     task_dir = cache / task_id
     if not task_dir.exists():
         return ""
-    for root, dirs, files in os.walk(task_dir):
+    for root, _dirs, files in os.walk(task_dir):
         if "instruction.md" in files:
             return (Path(root) / "instruction.md").read_text(errors="ignore")
     return ""

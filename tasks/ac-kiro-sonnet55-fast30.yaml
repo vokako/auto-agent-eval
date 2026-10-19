@@ -1,0 +1,14 @@
+# TB2-Fast30 on Bedrock AgentCore microVM; same image for every harness.
+backend: agentcore
+task_list: tb2-fast30.txt
+agentcore:
+  runner: $AAE_RUNNER
+  tasks_dir: $AAE_TASKS_DIR
+  mode: microvm
+  image: $AAE_IMAGE_REGISTRY/bench/{task}:arm64
+  config: config.json
+  jobs: 5
+agent:
+  name: kiro-cli
+  model: claude-sonnet-5.5
+  effort: high

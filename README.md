@@ -1,117 +1,100 @@
-# Agent Eval
+# Agent Eval (AAE)
 
-用 [Terminal-Bench 2.0](https://www.tbench.ai/) 跑 AI coding agent，然后用 LLM Judge 做增强评估。
+AI coding agent 评测工具：用 [Harbor](https://github.com/harbor-framework/harbor) 或 Amazon Bedrock AgentCore 沙箱跑 [Terminal-Bench 2.0](https://www.tbench.ai/) 一类的任务，把结果汇总到一个 Web 看板里，按 agent / 模型 / effort 对比通过率、成本和耗时。
 
-Terminal-Bench 只给 pass/fail，我们加了 LLM 打分，能看出 agent "差在哪" 和 "做得多好"。
+两层分工：
 
-## 项目结构
+- **执行层**（测试客户端）：Harbor `harbor run`，或 [agentcore-bench-runner](https://github.com/vokako/agentcore-bench-runner) 在 AgentCore microVM 里跑。负责跑任务、统计 token / credit，并把结果写成 Harbor 的 `jobs/` 格式。
+- **展示层**（`aae serve`）：只读 `jobs/`，按每个 job 里的 trial 统计，不关心任务是怎么分批跑的。
+
+## 目录
 
 ```
-agent-eval/
-│
-├── datasets/                    # Terminal-Bench 任务集（80 个任务，已固定）
-│   └── terminal-bench-core/     #   Terminal-Bench 2.0 core dataset
-│       ├── hello-world/         #     每个任务 = Dockerfile + 指令 + pytest
-│       ├── build-linux-kernel-qemu/
-│       └── ... (80 个)
-│
-├── agents/kiro_cli/             # Kiro CLI 的 Terminal-Bench 适配器
-│   ├── kiro_cli_agent.py        #   怎么在 Docker 容器里装和跑 kiro-cli
-│   ├── setup.sh.j2              #   容器内安装脚本模板
-│   └── agent.yaml               #   配置（region、timeout）
-│
-├── tasks/                       # 测试任务定义（dataset + agent + 评估 的组合）
-│   ├── kiro-sonnet-tb-core.yaml #   kiro-cli + sonnet-4.6 跑 TB 全部任务
-│   ├── kiro-glm5-tb-core.yaml   #   kiro-cli + glm-5
-│   ├── kiro-minimax-tb-core.yaml
-│   └── kiro-qwen-tb-core.yaml
-│
-├── aae/                         # 增强评估工具（跑完 TB 后用）
-│   ├── judge.py                 #   LLM Judge — 读 agent 输出，5 维度打分
-│   ├── rules.py                 #   规则检查 — 确定性验证（文件存在、命令输出）
-│   ├── composite.py             #   综合评分 — pytest + rules + judge 加权
-│   ├── tb.py                    #   读取 Terminal-Bench 的输出文件
-│   ├── models.py                #   数据模型
-│   └── cli.py                   #   命令行入口
-│
-├── rubrics/default.yaml         # Judge 评分标准（5 维度 0-3 分）
-│
-├── runs/                        # 测试结果（git ignored）
-│
-├── SPEC.md                      # 设计文档
-└── pyproject.toml
+aae/
+  cli.py          # 命令行：aae run / results / compare / judge / list / serve
+  server.py       # 看板后端（FastAPI），读 jobs/
+  agentcore.py    # AgentCore 后端：调用 agentcore-bench-runner，结果转成 Harbor jobs/ 格式
+  harbor.py       # 读 Harbor 结果
+  judge.py rules.py composite.py   # LLM Judge 增强评估（可选）
+agents/           # Harbor agent 适配器：claude_code / kiro_cli / qoder_cli
+tasks/            # 任务配置 YAML（数据集 + agent + 模型 + effort）和任务清单 *.txt
+scripts/
+  sync_agentcore_jobs.py   # 把 agentcore-bench-runner 的 runs/ 同步成 jobs/ac-*
+web/              # React + Vite + TypeScript 看板前端
+jobs/             # 运行结果（git ignored）
 ```
 
-## 怎么用
-
-### 用 Harbor 跑（推荐）
+## 安装
 
 ```bash
-pip install harbor
+uv sync                      # Python 3.12+
+cd web && npm ci && npm run build && cd ..
+```
 
-# CC + Sonnet 4.6 via Bedrock
+## 跑测试
+
+### Harbor（本地 Docker）
+
+```bash
+# Claude Code（Bedrock）
 harbor run -d terminal-bench/terminal-bench-2 -a claude-code \
     -m global.anthropic.claude-sonnet-4-6 \
-    --ae CLAUDE_CODE_USE_BEDROCK=1 --ae AWS_REGION=us-east-1 \
-    -n 4
+    --ae CLAUDE_CODE_USE_BEDROCK=1 --ae AWS_REGION=us-east-1 -n 4
 
-# Kiro CLI
+# Kiro CLI（自定义适配器）
 harbor run -d terminal-bench/terminal-bench-2 \
     --agent-import-path agents.kiro_cli.harbor_agent:KiroCliAgent \
     -m claude-sonnet-4.6 -n 4
-
-# Qoder CLI
-harbor run -d terminal-bench/terminal-bench-2 \
-    --agent-import-path agents.qoder_cli.harbor_agent:QoderCliAgent \
-    -m lite --ae QODER_PERSONAL_ACCESS_TOKEN=$QODER_PERSONAL_ACCESS_TOKEN -n 4
 ```
 
-### 用 AAE 跑（TB legacy + judge）
+或者用任务配置：`aae list` 列出 `tasks/*.yaml`，`aae run <name>` 运行。
+
+### AgentCore（microVM 沙箱）
+
+任务配置里写 `backend: agentcore`，`aae run` 会调用 agentcore-bench-runner，再把结果写进 `jobs/`。配置格式见 `aae/agentcore.py` 顶部的说明。`tasks/ac-*.yaml` 里和机器相关的部分从环境变量读，没设置会直接报错：
 
 ```bash
-uv sync
-
-# 列出可用的 task
-aae list
-
-# 跑一个 task（自动 tb run + judge）
-aae run kiro-sonnet-tb-core
-
-# 只跑 tb，不做 judge
-aae run kiro-sonnet-tb-core --no-judge
+export AAE_RUNNER=~/agentcore-bench-runner          # agentcore-bench-runner 的 checkout
+export AAE_TASKS_DIR=~/tb2                          # Harbor 任务目录（每个任务一个子目录）
+export AAE_IMAGE_REGISTRY=<account>.dkr.ecr.<region>.amazonaws.com   # 任务镜像所在的 ECR
+aae run ac-kiro-sonnet55-fast30
 ```
 
-### 第二步：增强评估
+如果直接用 agentcore-bench-runner 跑（例如它的 `scripts/sweep.sh`），跑完后同步到看板：
 
 ```bash
-# 对失败的任务做 LLM Judge 评估
-aae judge runs/{run-id}/ --failed-only
-
-# 对所有任务评估
-aae judge runs/{run-id}/ --all
-
-# 对比多个模型
-aae compare runs/kiro-sonnet-*/ runs/kiro-glm-*/
+.venv/bin/python scripts/sync_agentcore_jobs.py --runner <agentcore-bench-runner 路径>   # 或设置 AAE_RUNNER
 ```
 
-### 输出示例
+同步脚本把同一个 agent + 模型 + effort 的多个批次（如 Fast30 和 Hard20）合并成一个 job，数据集记为 `tb2-50`。
 
-```
-nginx-request-logging:
-  pytest:  FAIL (7/8 tests passed)
-  judge:   0.73 — "功能完全正确，log_format 放在 conf.d 而不是 nginx.conf"
-  composite: 0.37
+**复现已有结果：** 用 agentcore-bench-runner 默认分支的代码。每个 harness 默认装发布结果用的版本（Claude Code 2.1.296、Codex 0.162.1、kiro-cli 2.29.0、Kimi Code 2.1.1、Qoder CN 1.1.70、CodeBuddy 2.164.0）；Kimi Code、Qoder CN 和 CodeBuddy 的离线包要先用 runner 的 `scripts/build_harness_bundle.sh` 从仓库里的锁文件构建一次。权限、版本和具体命令见 runner 的 README「复现 harness 对比」一节。每组只跑一轮，同一组合重跑时通过数会有约 5 题的波动。
 
-build-linux-kernel-qemu:
-  pytest:  FAIL (timeout)
-  judge:   0.95 — "内核编译成功，只是超时了"
-  composite: 0.48
+## 看板
+
+```bash
+aae serve -p 8080                     # 默认只监听 127.0.0.1
+aae serve -p 8080 --host 0.0.0.0      # 只在有访问控制的代理后面这样用
+AAE_TASK_DIRS=<任务源码目录> aae serve   # 可选：任务详情里显示 instruction.md
 ```
 
-## 关键概念
+- **Jobs 页**：每列可筛选（文字列多选，数字列填范围），可显示/隐藏列，排序和筛选会保存在浏览器里。Cost 旁边的 `*` 表示有 trial 没记录到用量，这部分成本没算进去。Not run 列是额度耗尽、一次模型都没调用的 trial，不算进分数、成本和耗时。
+- **Job 详情**：每个任务的结果、耗时、成本，点开看日志和 trial 文件。
+- **Compare**：勾选 2 个以上 job，按任务对比，可只看结果不同的任务。
+- **Score charts**：勾选 job 后点 Chart。两张图：分数对每任务平均成本、分数对每任务平均耗时，都只按计分的任务算；同一 agent + 模型的 low → medium → high 连成一条线，悬停图例高亮单条线。
 
-- **datasets/** — Terminal-Bench 的任务，每个任务有 Dockerfile（运行环境）、instruction（给 agent 的指令）、pytest（验证）
-- **agents/kiro_cli/** — 告诉 Terminal-Bench 怎么在 Docker 容器里安装和运行 kiro-cli
-- **tasks/** — 测试任务定义，一个 YAML 文件 = dataset + agent + model + 评估配置
-- **aae/** — 跑完 Terminal-Bench 后的增强评估，读结果文件做 LLM 打分
-- **rubrics/** — LLM Judge 的评分标准，定义打哪几个维度、每个维度怎么打分
+前端开发：`cd web && npm run dev`，Vite 会把 `/api` 代理到 `AAE_API_URL`（默认 `http://127.0.0.1:8080`）。
+
+## 成本口径
+
+- Claude Code / Codex：按 token 数乘 Bedrock 价格重新计算（价格表在 agentcore-bench-runner 的 `benchmarks/pricing.json`），不用 harness 自报的数字。Codex 的 input token 含缓存部分，入库前减掉缓存，和 Claude Code 口径一致。
+- kiro-cli：只报 credit，按 $0.02/credit 换算。
+- Qoder CN：¥0.04/credit；CodeBuddy 国内版：¥0.0495/credit；人民币按 6.7 CNY/USD 换算。单价和来源都在 runner 的 `benchmarks/pricing.json`。
+
+## LLM Judge（可选）
+
+Terminal-Bench 只给 pass/fail。`aae judge` 用 LLM 按 `rubrics/default.yaml` 的 5 个维度给 agent 输出打分，看失败任务"差在哪"：
+
+```bash
+aae judge <run-dir> --failed-only
+```

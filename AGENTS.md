@@ -20,7 +20,8 @@ AI coding agent evaluation framework. Uses Harbor (Terminal-Bench 2.0) as execut
 aae/                  # Core framework
   cli.py              # CLI: aae run / judge / results / compare / list / serve
   harbor.py           # Harbor result reader (jobs/ format)
-  server.py           # FastAPI web dashboard backend
+  server.py           # FastAPI web dashboard backend (reads jobs/ only)
+  agentcore.py        # AgentCore backend: runs agentcore-bench-runner, converts results to jobs/ format
   judge.py            # LLM-based 5-dimension scoring
   rules.py            # Deterministic rule checks
   composite.py        # Weighted score combination
@@ -53,7 +54,9 @@ aae run kiro-sonnet-lite          # Run benchmark (harbor run + optional judge)
 aae run kiro-sonnet-lite --no-judge
 aae results jobs/kiro-sonnet-lite/2026-04-13__13-10-40 -v
 aae compare jobs/kiro-sonnet-lite/... jobs/cc-sonnet-lite/...
-aae serve -p 8080                 # Start web dashboard
+aae serve -p 8080                 # Start web dashboard (binds 127.0.0.1; --host to change)
+.venv/bin/python scripts/sync_agentcore_jobs.py   # Sync agentcore-bench-runner runs/ into jobs/ac-*
+cd web && npx tsc -b && npx eslint . && npm run build   # Frontend checks + build (web/dist is served by aae serve)
 ```
 
 ## Conventions
@@ -75,6 +78,10 @@ aae serve -p 8080                 # Start web dashboard
 - Docker Hub rate limit: 200 pulls/6h (logged in). Don't `docker system prune` — it deletes cached task images
 - Harbor task images are `alexgshaw/*:20251031` from Docker Hub, pre-pull to avoid rate limits
 - `jobs/.archive/` for failed/test runs, `jobs/.cache/` for API cache — both hidden from dashboard
+- Dashboard computes everything from a job's trials. Grouping (e.g. Fast30 + Hard20 → one `tb2-50` job) belongs in the test client / sync script, never in `server.py`
+- Trials whose harness reported no usage get `# usage: not recorded` in `agent/agent.txt`; the UI shows "—" per task and `*` on the job cost
+- Runs before 2026-10-10 did not record harness versions; the converter backfills the versions later trials recorded (`_BACKFILL_VERSION` in `aae/agentcore.py`)
+- After changing `aae/*.py`, restart `aae serve`; after changing `web/src`, rebuild `web/dist` (no restart needed). Clear `jobs/.cache/` when the job-detail payload changes
 
 ## Test Results (Harbor TB2, latest)
 
