@@ -68,6 +68,8 @@ aae run ac-kiro-sonnet55-fast30
 
 同步脚本把同一个 agent + 模型 + effort 的多个批次（如 Fast30 和 Hard20）合并成一个 job，数据集记为 `tb2-50`。
 
+**复现已有结果：** 用 agentcore-bench-runner 默认分支的代码。每个 harness 默认装发布结果用的版本（Claude Code 2.1.296、Codex 0.162.1、kiro-cli 2.29.0、Kimi Code 2.1.1、Qoder CN 1.1.70、CodeBuddy 2.164.0）；Kimi Code、Qoder CN 和 CodeBuddy 的离线包要先用 runner 的 `scripts/build_harness_bundle.sh` 从仓库里的锁文件构建一次。权限、版本和具体命令见 runner 的 README「复现 harness 对比」一节。每组只跑一轮，同一组合重跑时通过数会有约 5 题的波动。
+
 ## 看板
 
 ```bash
@@ -76,10 +78,10 @@ aae serve -p 8080 --host 0.0.0.0      # 只在有访问控制的代理后面这�
 AAE_TASK_DIRS=<任务源码目录> aae serve   # 可选：任务详情里显示 instruction.md
 ```
 
-- **Jobs 页**：每列可筛选（文字列多选，数字列填范围），可显示/隐藏列，排序和筛选会保存在浏览器里。Cost 旁边的 `*` 表示有 trial 没记录到用量，这部分成本没算进去。
+- **Jobs 页**：每列可筛选（文字列多选，数字列填范围），可显示/隐藏列，排序和筛选会保存在浏览器里。Cost 旁边的 `*` 表示有 trial 没记录到用量，这部分成本没算进去。Not run 列是额度耗尽、一次模型都没调用的 trial，不算进分数、成本和耗时。
 - **Job 详情**：每个任务的结果、耗时、成本，点开看日志和 trial 文件。
 - **Compare**：勾选 2 个以上 job，按任务对比，可只看结果不同的任务。
-- **Score charts**：勾选 job 后点 Chart。两张图：分数对成本、分数对每任务平均耗时；同一 agent + 模型的 low → medium → high 连成一条线，悬停图例高亮单条线。
+- **Score charts**：勾选 job 后点 Chart。两张图：分数对每任务平均成本、分数对每任务平均耗时，都只按计分的任务算；同一 agent + 模型的 low → medium → high 连成一条线，悬停图例高亮单条线。
 
 前端开发：`cd web && npm run dev`，Vite 会把 `/api` 代理到 `AAE_API_URL`（默认 `http://127.0.0.1:8080`）。
 
